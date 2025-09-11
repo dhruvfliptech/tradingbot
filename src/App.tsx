@@ -54,16 +54,15 @@ function App() {
         setLoading(true);
         
         console.log('🔄 Fetching dashboard data...');
-        // Temporarily bypass user check for demo
-        // if (!user) {
-        //   setLoading(false);
-        //   setApiStatuses({
-        //     alpaca: 'error',
-        //     coingecko: 'error',
-        //     supabase: 'error',
-        //   });
-        //   return;
-        // }
+        if (!user) {
+          setLoading(false);
+          setApiStatuses({
+            alpaca: 'error',
+            coingecko: 'error',
+            supabase: 'error',
+          });
+          return;
+        }
 
         // First fetch crypto data to ensure we have real-time prices
         console.log('📊 Fetching real-time crypto data...');
@@ -135,8 +134,7 @@ function App() {
     }, 30 * 1000); // 30s
 
     const refreshAlpaca = async () => {
-      // Temporarily bypass user check for demo
-      // if (!user) return;
+      if (!user) return;
       try {
         const [accountData, positionsData, ordersData] = await Promise.all([
           alpacaService.getAccount(),
@@ -295,31 +293,30 @@ function App() {
     );
   }
 
-  // Temporarily bypass authentication for demo purposes
-  // if (!user) {
-  //   return (
-  //     <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-  //       <div className="text-center">
-  //         <div className="mb-8">
-  //           <Bitcoin className="h-16 w-16 text-orange-400 mx-auto mb-4" />
-  //           <h1 className="text-3xl font-bold text-white mb-2">AI Crypto Trading Agent</h1>
-  //           <p className="text-gray-400">Sign in to access your crypto portfolio</p>
-  //         </div>
-  //         <button
-  //           onClick={() => setShowAuthModal(true)}
-  //           className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
-  //         >
-  //           Get Started
-  //         </button>
-  //       </div>
-  //       <AuthModal
-  //         isOpen={showAuthModal}
-  //         onClose={() => setShowAuthModal(false)}
-  //         onAuthSuccess={handleAuthSuccess}
-  //       />
-  //     </div>
-  //   );
-  // }
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-8">
+            <Bitcoin className="h-16 w-16 text-orange-400 mx-auto mb-4" />
+            <h1 className="text-3xl font-bold text-white mb-2">AI Crypto Trading Agent</h1>
+            <p className="text-gray-400">Sign in to access your crypto portfolio</p>
+          </div>
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+          >
+            Get Started
+          </button>
+        </div>
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -418,7 +415,7 @@ function App() {
              
               <div className="hidden md:flex items-center text-gray-300 text-sm">
                 <User className="h-4 w-4 mr-2" />
-                <span>{user?.email || 'demo@example.com'}</span>
+                <span>{user.email}</span>
               </div>
               <button
                 onClick={handleSignOut}
@@ -478,7 +475,7 @@ function App() {
       <SettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
-        userEmail={user?.email ?? 'demo@example.com'}
+        userEmail={user?.email ?? null}
         onSignOut={handleSignOut}
       />
 
