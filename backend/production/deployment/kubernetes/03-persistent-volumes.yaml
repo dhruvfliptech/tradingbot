@@ -1,0 +1,251 @@
+# Persistent Volumes for Trading Bot
+# ==================================
+# Storage for databases, logs, and model data
+
+# Storage Class for SSD storage
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: trading-bot-ssd
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: storage
+provisioner: kubernetes.io/aws-ebs  # Change for your cloud provider
+parameters:
+  type: gp3
+  fsType: ext4
+  encrypted: "true"
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Redis Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# InfluxDB Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: influxdb-data-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: influxdb
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# InfluxDB Config Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: influxdb-config-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: influxdb
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# ML Models Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-models-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: ml-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# RL Models Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rl-models-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: rl-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 30Gi
+
+---
+# RL Data Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rl-data-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: rl-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# Prometheus Data Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: prometheus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# Grafana Data Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: grafana
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# AlertManager Data Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alertmanager-data-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: alertmanager
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: trading-bot-ssd
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Shared logs volume for all services
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-logs-pvc
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: logging
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods can write logs
+  storageClassName: efs-sc  # Use EFS or similar for shared access
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# EFS Storage Class for shared volumes (AWS)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: storage
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: fs-xxxxxxxx  # Replace with your EFS file system ID
+  directoryPerms: "0755"
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+
+---
+# Azure Files Storage Class (Azure)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azure-files-sc
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: storage
+provisioner: file.csi.azure.com
+parameters:
+  skuName: Premium_LRS
+  storageAccount: yourstorageaccount  # Replace with your storage account
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+
+---
+# Google Cloud Filestore Storage Class (GCP)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: filestore-sc
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: storage
+provisioner: filestore.csi.storage.gke.io
+parameters:
+  tier: premium
+  network: default
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

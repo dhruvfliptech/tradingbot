@@ -1,0 +1,57 @@
+# Trading Bot Namespace
+# =====================
+# Isolates all trading bot resources in a dedicated namespace
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trading-bot
+  labels:
+    name: trading-bot
+    environment: production
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: namespace
+  annotations:
+    description: "Trading Bot Production Environment"
+    contact: "devops@tradingbot.com"
+    cost-center: "trading-systems"
+
+---
+# Resource Quotas for the namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: trading-bot-quota
+  namespace: trading-bot
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    pods: "20"
+    persistentvolumeclaims: "10"
+    services: "10"
+    secrets: "20"
+    configmaps: "20"
+
+---
+# Limit Range for default resource limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: trading-bot-limits
+  namespace: trading-bot
+spec:
+  limits:
+  - default:
+      cpu: "1"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    type: Container
+  - default:
+      storage: "10Gi"
+    type: PersistentVolumeClaim

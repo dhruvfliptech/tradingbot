@@ -1,0 +1,293 @@
+# Alertmanager Configuration for Trading Bot
+
+global:
+  smtp_smarthost: '${SMTP_HOST:-localhost:587}'
+  smtp_from: '${SMTP_FROM:-alerts@tradingbot.local}'
+  smtp_auth_username: '${SMTP_USER:-}'
+  smtp_auth_password: '${SMTP_PASSWORD:-}'
+
+# Template files
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Routing configuration
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'telegram-critical'
+  routes:
+    # Critical trading alerts - immediate notification
+    - match:
+        severity: critical
+        component: trading
+      receiver: 'telegram-critical'
+      group_wait: 5s
+      repeat_interval: 30m
+      
+    # Critical risk alerts - immediate notification  
+    - match:
+        severity: critical
+        component: risk
+      receiver: 'telegram-critical'
+      group_wait: 5s
+      repeat_interval: 15m
+      
+    # System critical alerts
+    - match:
+        severity: critical
+        component: system
+      receiver: 'telegram-system'
+      group_wait: 30s
+      repeat_interval: 1h
+      
+    # Warning level alerts
+    - match:
+        severity: warning
+      receiver: 'telegram-warnings'
+      group_wait: 5m
+      repeat_interval: 2h
+      
+    # ML/Agent alerts
+    - match:
+        component: ml
+      receiver: 'telegram-ml'
+      group_wait: 1m
+      repeat_interval: 4h
+      
+    # Health check alerts
+    - match:
+        component: health
+      receiver: 'telegram-health'
+      group_wait: 2m
+      repeat_interval: 1h
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Suppress warning alerts when critical alerts are active
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'service']
+
+  # Suppress individual component alerts when system is down
+  - source_matchers:
+      - alertname="SystemHealthDegraded"
+    target_matchers:
+      - component=~"api|database|trading"
+    equal: ['cluster']
+
+  # Suppress trading alerts when risk alerts are critical
+  - source_matchers:
+      - severity="critical"
+      - component="risk"
+    target_matchers:
+      - component="trading"
+      - severity="warning"
+
+# Receiver configurations
+receivers:
+  # Critical trading and risk alerts
+  - name: 'telegram-critical'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: '${TELEGRAM_CRITICAL_CHAT_ID}'
+        api_url: 'https://api.telegram.org'
+        send_resolved: true
+        parse_mode: 'Markdown'
+        title: '🚨 CRITICAL ALERT: {{ .GroupLabels.alertname }}'
+        message: |
+          🚨 *CRITICAL TRADING BOT ALERT*
+          
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity | toUpper }}
+          *Component:* {{ .CommonLabels.component | toUpper }}
+          
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Action Required:* {{ .Annotations.action }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+          
+          🔗 [View in Grafana](http://localhost:3000)
+          🔗 [View in Prometheus](http://localhost:9090)
+
+  # System alerts
+  - name: 'telegram-system'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: '${TELEGRAM_SYSTEM_CHAT_ID:-${TELEGRAM_CRITICAL_CHAT_ID}}'
+        api_url: 'https://api.telegram.org'
+        send_resolved: true
+        parse_mode: 'Markdown'
+        title: '⚠️ System Alert: {{ .GroupLabels.alertname }}'
+        message: |
+          ⚠️ *SYSTEM ALERT*
+          
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity | toUpper }}
+          
+          {{ range .Alerts }}
+          *Details:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+
+  # Warning level alerts
+  - name: 'telegram-warnings'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: '${TELEGRAM_WARNING_CHAT_ID:-${TELEGRAM_CRITICAL_CHAT_ID}}'
+        api_url: 'https://api.telegram.org'
+        send_resolved: true
+        parse_mode: 'Markdown'
+        title: '⚠️ Warning: {{ .GroupLabels.alertname }}'
+        message: |
+          ⚠️ *WARNING*
+          
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Component:* {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+
+  # ML and Agent alerts
+  - name: 'telegram-ml'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: '${TELEGRAM_ML_CHAT_ID:-${TELEGRAM_CRITICAL_CHAT_ID}}'
+        api_url: 'https://api.telegram.org'
+        send_resolved: true
+        parse_mode: 'Markdown'
+        title: '🤖 ML Alert: {{ .GroupLabels.alertname }}'
+        message: |
+          🤖 *ML/AGENT ALERT*
+          
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Model/Agent:* {{ .CommonLabels.agent_type | default "Unknown" }}
+          
+          {{ range .Alerts }}
+          *Details:* {{ .Annotations.summary }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+
+  # Health check alerts
+  - name: 'telegram-health'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: '${TELEGRAM_HEALTH_CHAT_ID:-${TELEGRAM_CRITICAL_CHAT_ID}}'
+        api_url: 'https://api.telegram.org'
+        send_resolved: true
+        parse_mode: 'Markdown'
+        title: '🏥 Health Alert: {{ .GroupLabels.alertname }}'
+        message: |
+          🏥 *HEALTH CHECK ALERT*
+          
+          *Service:* {{ .CommonLabels.service }}
+          *Alert:* {{ .GroupLabels.alertname }}
+          
+          {{ range .Alerts }}
+          *Status:* {{ .Annotations.summary }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+
+  # Email notifications (backup)
+  - name: 'email-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL:-admin@tradingbot.local}'
+        from: '${SMTP_FROM:-alerts@tradingbot.local}'
+        smarthost: '${SMTP_HOST:-localhost:587}'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
+        subject: 'Trading Bot Alert: {{ .GroupLabels.alertname }}'
+        headers:
+          From: '${SMTP_FROM:-alerts@tradingbot.local}'
+          To: '${ALERT_EMAIL:-admin@tradingbot.local}'
+          Subject: 'Trading Bot Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Trading Bot Alert Details:
+          
+          Alert: {{ .GroupLabels.alertname }}
+          Severity: {{ .CommonLabels.severity }}
+          Component: {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          Summary: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started: {{ .StartsAt }}
+          {{ if .EndsAt }}Ended: {{ .EndsAt }}{{ end }}
+          
+          {{ end }}
+          
+          View details:
+          - Grafana: http://localhost:3000
+          - Prometheus: http://localhost:9090
+          - Alertmanager: http://localhost:9093
+
+  # Webhook for integration with external systems
+  - name: 'webhook-alerts'
+    webhook_configs:
+      - url: '${WEBHOOK_URL}'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: '${WEBHOOK_USER}'
+            password: '${WEBHOOK_PASSWORD}'
+        title: 'Trading Bot Alert'
+        text: |
+          Alert: {{ .GroupLabels.alertname }}
+          Severity: {{ .CommonLabels.severity }}
+          Component: {{ .CommonLabels.component }}
+          Time: {{ .StartsAt }}
+
+  # Slack notifications (if preferred over Telegram)
+  - name: 'slack-alerts'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '${SLACK_CHANNEL:-#trading-alerts}'
+        username: 'TradingBot-Alerts'
+        icon_emoji: ':warning:'
+        title: 'Trading Bot Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Severity:* {{ .CommonLabels.severity | toUpper }}
+          *Component:* {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+        
+        actions:
+          - type: button
+            text: 'View Grafana'
+            url: 'http://localhost:3000'
+          - type: button
+            text: 'View Prometheus'
+            url: 'http://localhost:9090'
+
+# Time intervals for notification policies
+time_intervals:
+  - name: business-hours
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '17:00'
+        weekdays: ['monday:friday']
+        
+  - name: weekends
+    time_intervals:
+      - weekdays: ['saturday', 'sunday']
+
+# Configuration for alert resolution
+global:
+  resolve_timeout: 5m
+
+# Silencing configuration
+# You can create silences via the API or web UI

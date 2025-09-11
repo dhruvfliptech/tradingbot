@@ -1,0 +1,495 @@
+# Trading Bot CI/CD Pipeline
+# ===========================
+# Comprehensive deployment pipeline with testing, security scanning, and multi-environment support
+
+name: Trading Bot CI/CD
+
+on:
+  push:
+    branches: [main, develop, release/*]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/**'
+      - 'docker-compose*.yml'
+      - 'Dockerfile*'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/**'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_deploy:
+        description: 'Force deployment (skip safety checks)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository }}/trading-bot-backend
+  IMAGE_NAME_ML: ${{ github.repository }}/trading-bot-ml
+  IMAGE_NAME_RL: ${{ github.repository }}/trading-bot-rl
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.10'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ======================
+  # Code Quality & Testing
+  # ======================
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, ml-service, rl-service]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js (Backend)
+      if: matrix.service == 'backend'
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: 'backend/package-lock.json'
+
+    - name: Set up Python (ML/RL Services)
+      if: matrix.service != 'backend'
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install dependencies (Backend)
+      if: matrix.service == 'backend'
+      working-directory: ./backend
+      run: |
+        npm ci
+        npm install -g typescript
+
+    - name: Install dependencies (ML Service)
+      if: matrix.service == 'ml-service'
+      working-directory: ./backend/ml-service
+      run: |
+        pip install -r requirements.txt
+        pip install pytest flake8 black mypy
+
+    - name: Install dependencies (RL Service)
+      if: matrix.service == 'rl-service'
+      working-directory: ./backend/rl-service
+      run: |
+        pip install -r integration/requirements.txt
+        pip install -r requirements-test.txt
+
+    - name: Lint code (Backend)
+      if: matrix.service == 'backend'
+      working-directory: ./backend
+      run: |
+        npm run lint
+        npm run type-check
+
+    - name: Lint code (ML Service)
+      if: matrix.service == 'ml-service'
+      working-directory: ./backend/ml-service
+      run: |
+        flake8 . --max-line-length=88 --extend-ignore=E203,W503
+        black --check .
+        mypy . --ignore-missing-imports
+
+    - name: Lint code (RL Service)
+      if: matrix.service == 'rl-service'
+      working-directory: ./backend/rl-service
+      run: |
+        flake8 . --max-line-length=88 --extend-ignore=E203,W503
+        black --check .
+        mypy . --ignore-missing-imports
+
+    - name: Run tests (Backend)
+      if: matrix.service == 'backend'
+      working-directory: ./backend
+      run: |
+        npm test -- --coverage --watchAll=false
+        npm run test:integration
+
+    - name: Run tests (ML Service)
+      if: matrix.service == 'ml-service'
+      working-directory: ./backend/ml-service
+      run: |
+        pytest -v --cov=. --cov-report=xml
+
+    - name: Run tests (RL Service)
+      if: matrix.service == 'rl-service'
+      working-directory: ./backend/rl-service
+      run: |
+        pytest -v --cov=. --cov-report=xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: ${{ matrix.service }}
+        name: ${{ matrix.service }}-coverage
+
+  # ===================
+  # Security Scanning
+  # ===================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Scan for secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+
+    - name: OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'trading-bot'
+        path: '.'
+        format: 'ALL'
+
+  # ==================
+  # Build Docker Images
+  # ==================
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, security-scan]
+    if: github.event_name != 'pull_request'
+    
+    strategy:
+      matrix:
+        service: [backend, ml-service, rl-service]
+    
+    outputs:
+      backend-digest: ${{ steps.build-backend.outputs.digest }}
+      ml-digest: ${{ steps.build-ml.outputs.digest }}
+      rl-digest: ${{ steps.build-rl.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ML }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RL }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Backend image
+      if: matrix.service == 'backend'
+      id: build-backend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/docker/Dockerfile.backend
+        target: production
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ steps.meta.outputs.version }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Build and push ML Service image
+      if: matrix.service == 'ml-service'
+      id: build-ml
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend/ml-service
+        file: ./backend/ml-service/Dockerfile.ml-service
+        target: production
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ML }}:${{ steps.meta.outputs.version }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Build and push RL Service image
+      if: matrix.service == 'rl-service'
+      id: build-rl
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend/rl-service
+        file: ./backend/rl-service/Dockerfile
+        target: production
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RL }}:${{ steps.meta.outputs.version }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Scan Docker images
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ steps.meta.outputs.version }}
+        format: 'sarif'
+        output: 'docker-scan-results.sarif'
+
+  # =================
+  # Deploy to Staging
+  # =================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-images
+    if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.tradingbot.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Configure kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name ${{ vars.EKS_CLUSTER_NAME_STAGING }}
+
+    - name: Deploy to staging
+      working-directory: ./backend/production/deployment
+      run: |
+        export VERSION=${{ needs.build-images.outputs.version }}
+        export REGISTRY_URL=${{ env.REGISTRY }}
+        export ENVIRONMENT=staging
+        ./scripts/deploy.sh staging
+
+    - name: Run smoke tests
+      run: |
+        kubectl wait --for=condition=available --timeout=600s deployment/backend-deployment -n trading-bot
+        kubectl wait --for=condition=available --timeout=600s deployment/ml-service-deployment -n trading-bot
+        kubectl wait --for=condition=available --timeout=600s deployment/rl-service-deployment -n trading-bot
+        
+        # Run health checks
+        ./backend/production/deployment/scripts/health-check.sh staging
+
+    - name: Run integration tests
+      run: |
+        kubectl run integration-tests --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ needs.build-images.outputs.version }} \
+          --rm -i --restart=Never --namespace=trading-bot \
+          -- npm run test:integration:staging
+
+  # ==================
+  # Deploy to Production
+  # ==================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-images, deploy-staging]
+    if: |
+      (github.ref == 'refs/heads/main' && needs.deploy-staging.result == 'success') ||
+      (github.event_name == 'release' && github.event.action == 'published') ||
+      (github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://tradingbot.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Configure kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name ${{ vars.EKS_CLUSTER_NAME_PROD }}
+
+    - name: Pre-deployment backup
+      working-directory: ./backend/production/deployment
+      run: |
+        ./scripts/backup.sh production
+
+    - name: Deploy to production with blue-green strategy
+      working-directory: ./backend/production/deployment
+      run: |
+        export VERSION=${{ needs.build-images.outputs.version }}
+        export REGISTRY_URL=${{ env.REGISTRY }}
+        export ENVIRONMENT=production
+        export DEPLOYMENT_STRATEGY=blue-green
+        ./scripts/deploy.sh production
+
+    - name: Run production smoke tests
+      run: |
+        kubectl wait --for=condition=available --timeout=600s deployment/backend-deployment -n trading-bot
+        kubectl wait --for=condition=available --timeout=600s deployment/ml-service-deployment -n trading-bot
+        kubectl wait --for=condition=available --timeout=600s deployment/rl-service-deployment -n trading-bot
+        
+        # Run comprehensive health checks
+        ./backend/production/deployment/scripts/health-check.sh production
+
+    - name: Monitor deployment
+      run: |
+        # Monitor for 10 minutes to ensure stable deployment
+        ./backend/production/deployment/scripts/monitor-deployment.sh production 600
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        echo "Deployment failed, initiating rollback..."
+        ./backend/production/deployment/scripts/rollback.sh production
+
+    - name: Update deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Production deployment successful"
+          # Send success notification
+          curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data '{"text":"🚀 Trading Bot v${{ needs.build-images.outputs.version }} successfully deployed to production!"}'
+        else
+          echo "❌ Production deployment failed"
+          # Send failure notification
+          curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data '{"text":"🚨 Trading Bot deployment to production FAILED! Manual intervention required."}'
+        fi
+
+  # ==================
+  # Post-Deployment Tasks
+  # ==================
+  post-deployment:
+    name: Post-Deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: success()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Update documentation
+      run: |
+        # Update deployment documentation
+        echo "## Deployment $(date)" >> DEPLOYMENT_LOG.md
+        echo "- Version: ${{ needs.build-images.outputs.version }}" >> DEPLOYMENT_LOG.md
+        echo "- Commit: ${{ github.sha }}" >> DEPLOYMENT_LOG.md
+        echo "- Deployed by: ${{ github.actor }}" >> DEPLOYMENT_LOG.md
+        echo "" >> DEPLOYMENT_LOG.md
+
+    - name: Create GitHub release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ needs.build-images.outputs.version }}
+        release_name: Trading Bot v${{ needs.build-images.outputs.version }}
+        body: |
+          ## Changes
+          - Automated deployment from commit ${{ github.sha }}
+          
+          ## Docker Images
+          - Backend: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ needs.build-images.outputs.version }}`
+          - ML Service: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ML }}:${{ needs.build-images.outputs.version }}`
+          - RL Service: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RL }}:${{ needs.build-images.outputs.version }}`
+        draft: false
+        prerelease: false
+
+  # ===================
+  # Cleanup Old Images
+  # ===================
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: [post-deployment]
+    if: always()
+    
+    steps:
+    - name: Delete old package versions
+      uses: actions/delete-package-versions@v4
+      with:
+        package-name: 'trading-bot-backend'
+        package-type: 'container'
+        min-versions-to-keep: 10
+        delete-only-untagged-versions: true
+
+    - name: Cleanup staging resources
+      if: github.ref == 'refs/heads/main'
+      run: |
+        # Cleanup old staging deployments and resources
+        echo "Cleaning up old staging resources..."

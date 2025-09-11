@@ -1,0 +1,550 @@
+# StatefulSets for Trading Bot
+# ============================
+# Stateful services requiring persistent storage and stable network identities
+
+# Redis StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-statefulset
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/version: "7.2"
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trading-bot
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: redis
+        app.kubernetes.io/version: "7.2"
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+          protocol: TCP
+        command:
+        - redis-server
+        - /etc/redis/redis.conf
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trading-bot-secrets
+              key: REDIS_PASSWORD
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - --raw
+            - incr
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 999
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+          items:
+          - key: redis.conf
+            path: redis.conf
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: redis
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: trading-bot-ssd
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# InfluxDB StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: influxdb-statefulset
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: influxdb
+    app.kubernetes.io/version: "2.7"
+spec:
+  serviceName: influxdb-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trading-bot
+      app.kubernetes.io/component: influxdb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: influxdb
+        app.kubernetes.io/version: "2.7"
+    spec:
+      initContainers:
+      - name: init-influxdb
+        image: influxdb:2.7-alpine
+        command:
+        - sh
+        - -c
+        - |
+          mkdir -p /var/lib/influxdb2
+          chown -R influxdb:influxdb /var/lib/influxdb2
+        volumeMounts:
+        - name: influxdb-data
+          mountPath: /var/lib/influxdb2
+        securityContext:
+          runAsUser: 0
+      containers:
+      - name: influxdb
+        image: influxdb:2.7-alpine
+        ports:
+        - containerPort: 8086
+          name: http
+          protocol: TCP
+        env:
+        - name: INFLUXDB_DB
+          value: "trading_bot"
+        - name: INFLUXDB_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: trading-bot-secrets
+              key: INFLUXDB_ADMIN_USER
+        - name: INFLUXDB_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trading-bot-secrets
+              key: INFLUXDB_ADMIN_PASSWORD
+        - name: INFLUXDB_USER
+          valueFrom:
+            secretKeyRef:
+              name: trading-bot-secrets
+              key: INFLUXDB_USER
+        - name: INFLUXDB_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trading-bot-secrets
+              key: INFLUXDB_USER_PASSWORD
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8086
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8086
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8086
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
+        volumeMounts:
+        - name: influxdb-data
+          mountPath: /var/lib/influxdb2
+        - name: influxdb-config
+          mountPath: /etc/influxdb2
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # InfluxDB needs to write config files
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+  volumeClaimTemplates:
+  - metadata:
+      name: influxdb-data
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: influxdb
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: trading-bot-ssd
+      resources:
+        requests:
+          storage: 50Gi
+  - metadata:
+      name: influxdb-config
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: influxdb
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: trading-bot-ssd
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# Prometheus StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus-statefulset
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: prometheus
+    app.kubernetes.io/version: "2.48"
+spec:
+  serviceName: prometheus-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trading-bot
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: prometheus
+        app.kubernetes.io/version: "2.48"
+    spec:
+      serviceAccountName: prometheus-service-account
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.48.0
+        ports:
+        - containerPort: 9090
+          name: web
+          protocol: TCP
+        args:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --storage.tsdb.retention.time=15d
+        - --storage.tsdb.retention.size=10GB
+        - --web.console.libraries=/usr/share/prometheus/console_libraries
+        - --web.console.templates=/usr/share/prometheus/consoles
+        - --web.enable-lifecycle
+        - --web.enable-admin-api
+        - --log.level=info
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 3Gi
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: prometheus-data
+          mountPath: /prometheus
+        - name: prometheus-config
+          mountPath: /etc/prometheus
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+          items:
+          - key: prometheus.yml
+            path: prometheus.yml
+  volumeClaimTemplates:
+  - metadata:
+      name: prometheus-data
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: prometheus
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: trading-bot-ssd
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# Grafana StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: grafana-statefulset
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: grafana
+    app.kubernetes.io/version: "10.2"
+spec:
+  serviceName: grafana-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trading-bot
+      app.kubernetes.io/component: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: grafana
+        app.kubernetes.io/version: "10.2"
+    spec:
+      securityContext:
+        fsGroup: 472
+        runAsUser: 472
+        runAsNonRoot: true
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.2.0
+        ports:
+        - containerPort: 3000
+          name: web
+          protocol: TCP
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: trading-bot-secrets
+              key: GRAFANA_ADMIN_USER
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trading-bot-secrets
+              key: GRAFANA_ADMIN_PASSWORD
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-clock-panel,grafana-simple-json-datasource"
+        - name: GF_PATHS_PROVISIONING
+          value: "/etc/grafana/provisioning"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: grafana-data
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards
+          readOnly: true
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Grafana needs to write to data directory
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+  volumeClaimTemplates:
+  - metadata:
+      name: grafana-data
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: grafana
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: trading-bot-ssd
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# AlertManager StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: alertmanager-statefulset
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: alertmanager
+    app.kubernetes.io/version: "0.26"
+spec:
+  serviceName: alertmanager-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trading-bot
+      app.kubernetes.io/component: alertmanager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: alertmanager
+        app.kubernetes.io/version: "0.26"
+    spec:
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:v0.26.0
+        ports:
+        - containerPort: 9093
+          name: web
+          protocol: TCP
+        args:
+        - --config.file=/etc/alertmanager/alertmanager.yml
+        - --storage.path=/alertmanager
+        - --cluster.advertise-address=0.0.0.0:9093
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: alertmanager-data
+          mountPath: /alertmanager
+        - name: alertmanager-config
+          mountPath: /etc/alertmanager
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: alertmanager-config
+        configMap:
+          name: alertmanager-config
+  volumeClaimTemplates:
+  - metadata:
+      name: alertmanager-data
+      labels:
+        app.kubernetes.io/name: trading-bot
+        app.kubernetes.io/component: alertmanager
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: trading-bot-ssd
+      resources:
+        requests:
+          storage: 5Gi

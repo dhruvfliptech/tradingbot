@@ -1,0 +1,108 @@
+# Grafana Datasources Configuration
+
+apiVersion: 1
+
+# List of datasources to insert/update
+datasources:
+  # Prometheus - Main metrics source
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.47.0
+      cacheLevel: 'High'
+      timeInterval: 15s
+      queryTimeout: 60s
+      defaultEditor: code
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger-uid
+          urlDisplayLabel: 'View Trace'
+    editable: true
+
+  # Loki - Log aggregation
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          label: trace_id
+          regex: '(?:trace_id|traceID)=(\w+)'
+          url: '$${__value.raw}'
+          datasourceUid: jaeger-uid
+          urlDisplayLabel: 'View Trace'
+    editable: true
+
+  # Jaeger - Distributed tracing
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger-uid
+    access: proxy
+    url: http://jaeger:16686
+    jsonData:
+      tracesToLogs:
+        datasourceUid: loki-uid
+        tags: ['job', 'instance', 'pod', 'namespace']
+        mappedTags: [{ key: 'service.name', value: 'service' }]
+        mapTagNamesEnabled: false
+        spanStartTimeShift: '1h'
+        spanEndTimeShift: '1h'
+        filterByTraceID: false
+        filterBySpanID: false
+      tracesToMetrics:
+        datasourceUid: prometheus-uid
+        tags: [{ key: 'service.name', value: 'service' }, { key: 'job' }]
+        queries:
+          - name: 'Sample query'
+            query: 'sum(rate(tempo_spanmetrics_latency_bucket{$$__tags}[5m]))'
+      nodeGraph:
+        enabled: true
+    editable: true
+
+  # Redis for caching metrics
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis:6379
+    jsonData:
+      client: 'standalone'
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
+    editable: true
+
+  # TestData for demo purposes
+  - name: TestData
+    type: testdata
+    access: proxy
+    isDefault: false
+    editable: true
+
+  # Grafana internal metrics
+  - name: Grafana
+    type: prometheus
+    access: proxy
+    url: http://grafana:3000/metrics
+    jsonData:
+      httpMethod: GET
+      manageAlerts: false
+    editable: false
+
+# Optional: Configure alerting datasources
+alerting:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus-uid
+    url: http://prometheus:9090
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true

@@ -1,0 +1,121 @@
+# ML Service Configuration Example
+# Copy this file and customize for your environment
+
+# Basic service configuration
+environment: development  # development, staging, production
+debug: true
+host: 0.0.0.0
+port: 5000
+workers: 4
+
+# Database configuration
+database:
+  url: postgresql://username:password@localhost:5432/trading_bot
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false  # Set to true for SQL query logging
+
+# Adaptive threshold configuration
+adaptation:
+  # Learning parameters
+  default_learning_rate: 0.01
+  min_learning_rate: 0.001
+  max_learning_rate: 0.1
+  
+  # Performance tracking
+  performance_window: 100
+  min_trades_for_adaptation: 10
+  adaptation_frequency_hours: 24
+  
+  # Threshold bounds (min, max)
+  rsi_bounds: [50.0, 90.0]
+  confidence_bounds: [0.5, 0.95]
+  macd_bounds: [-0.1, 0.1]
+  volume_bounds: [100000000, 10000000000]
+  momentum_bounds: [1.0, 5.0]
+  
+  # Default parameter values
+  default_parameters:
+    rsi_threshold: 70.0
+    confidence_threshold: 0.75
+    macd_threshold: 0.0
+    volume_threshold: 1000000000
+    momentum_threshold: 2.0
+  
+  # Performance score weights
+  performance_weights:
+    total_return: 0.3
+    sharpe_ratio: 0.25
+    win_rate: 0.2
+    max_drawdown: -0.15  # Negative weight (lower is better)
+    volatility: -0.1     # Negative weight (lower is better)
+  
+  # Safeguards
+  max_adaptation_per_cycle: 0.1    # 10% max change per cycle
+  min_adaptation_threshold: 0.005  # 0.5% minimum change to apply
+  cooldown_after_poor_performance_hours: 48
+
+# Logging configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
+  file_path: /var/log/ml-service/app.log
+  max_file_size: 10485760  # 10MB
+  backup_count: 5
+  
+  # Structured logging
+  enable_json_logging: false
+  enable_request_id: true
+  
+  # External logging services (optional)
+  sentry_dsn: null  # Set for error tracking
+  datadog_api_key: null  # Set for metrics
+
+# Security configuration
+security:
+  admin_api_key: your-secret-admin-key-here
+  flask_secret_key: your-flask-secret-key-here
+  cors_origins:
+    - http://localhost:3000
+    - http://localhost:5173
+    - https://yourdomain.com
+  
+  # Rate limiting
+  enable_rate_limiting: true
+  rate_limit_per_minute: 60
+  
+  # Request validation
+  max_request_size: 1048576  # 1MB
+  request_timeout: 30
+
+# Monitoring and metrics
+monitoring:
+  enable_metrics: true
+  metrics_port: 8000
+  
+  # Health check settings
+  health_check_timeout: 5
+  
+  # Performance monitoring
+  enable_performance_tracking: true
+  performance_sample_rate: 1.0
+  
+  # Alerting thresholds
+  alert_on_adaptation_failure: true
+  alert_on_db_connection_failure: true
+  alert_poor_performance_threshold: 0.2
+  
+  # Notification channels (optional)
+  slack_webhook_url: null  # Set for Slack notifications
+
+# Caching configuration
+cache:
+  enable_redis: false  # Set to true for Redis caching
+  redis_url: redis://localhost:6379/0
+  default_ttl: 3600  # 1 hour
+  
+  # Memory cache fallback
+  enable_memory_cache: true
+  memory_cache_size: 1000
