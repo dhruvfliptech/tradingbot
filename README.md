@@ -1,380 +1,220 @@
-# 🤖 AI Crypto Trading Bot - Institutional Grade Automated Trading System
+# AI-Powered Crypto Trading Bot 🤖📈
 
-[![Status](https://img.shields.io/badge/Status-Production%20Ready-success)](https://github.com/yourusername/tradingbot)
-[![Performance](https://img.shields.io/badge/Sharpe%20Ratio-%3E1.5-blue)](https://github.com/yourusername/tradingbot)
-[![Latency](https://img.shields.io/badge/Execution-%3C100ms-green)](https://github.com/yourusername/tradingbot)
-[![Coverage](https://img.shields.io/badge/Test%20Coverage-80%25-brightgreen)](https://github.com/yourusername/tradingbot)
-
-An advanced AI-powered cryptocurrency trading bot that combines reinforcement learning, institutional trading strategies, and comprehensive risk management to achieve consistent returns in crypto markets.
+An advanced cryptocurrency trading bot featuring Groq AI reasoning engine, multi-exchange support, and institutional-grade analytics. Built with React, TypeScript, and cutting-edge AI technology.
 
 ## 🌟 Key Features
 
-- **🧠 Reinforcement Learning Core**: PPO-based agents that learn and adapt to market conditions
-- **🎯 Multi-Agent Ensemble**: Specialized agents for different market regimes (bull, bear, sideways, volatile)
-- **📊 Institutional Strategies**: Liquidity hunting, smart money divergence, volume profile analysis
-- **⚡ Ultra-Low Latency**: Sub-100ms execution pipeline with optimized performance
-- **🛡️ Advanced Risk Management**: VaR monitoring, circuit breakers, dynamic position sizing
-- **📈 Real-Time Monitoring**: Prometheus + Grafana dashboards with Telegram alerts
-- **🔄 24/7 Automation**: Continuous operation with disaster recovery
-- **🔒 Security First**: Encrypted API keys, RLS, comprehensive audit logging
+### AI Intelligence
+- **Groq AI Integration**: Leverages Mixtral-8x7b model for sophisticated trading decisions
+- **6-Validator System**: Cross-validates signals from multiple independent indicators
+- **Funding Rate Analysis**: Monitors perpetual futures funding across exchanges for overleveraged conditions
+- **Sentiment Analysis**: Real-time market sentiment evaluation
 
-## 📊 Performance Targets
+### Advanced Analytics
+- **Portfolio Metrics**: Sharpe ratio, Sortino ratio, Calmar ratio, Alpha/Beta calculations
+- **Trade History**: Complete tracking with filtering and CSV export
+- **Correlation Heatmap**: Visual risk assessment across portfolio assets
+- **P&L Tracking**: Daily, weekly, monthly, and all-time performance views
 
-| Metric | Target | Achieved |
-|--------|---------|----------|
-| Weekly Returns | 3-5% | ✅ Optimized |
-| Sharpe Ratio | >1.5 | ✅ 1.8+ |
-| Max Drawdown | <15% | ✅ 12% limit |
-| Win Rate | >60% | ✅ 65%+ |
-| Execution Speed | <100ms | ✅ 45-85ms |
+### Trading Features
+- **Multi-Exchange Support**: Binance, Bybit, OKX, Coinglass integration
+- **Market Hours Enforcement**: 9 AM - 6 PM EST with override capability
+- **Risk Management**: 2:1 minimum risk/reward ratio, position sizing limits
+- **Demo Mode**: Full functionality without live trading accounts
 
-## 🏗️ System Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   React Frontend                         │
-│         Dashboard • Settings • Performance Charts        │
-└────────────────────┬────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────┐
-│              Backend Services (Node.js)                  │
-│    Trading Service • Risk Manager • API Gateway          │
-└────────────────────┬────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────┐
-│          Reinforcement Learning (Python)                 │
-│    PPO Agents • Ensemble • Reward Functions              │
-└────────────────────┬────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────┐
-│           Institutional Strategies                       │
-│  Liquidity • Smart Money • Volume • Correlation          │
-└────────────────────┬────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────┐
-│             Data & Integration Layer                     │
-│    Market Data • On-Chain • APIs • WebSockets            │
-└──────────────────────────────────────────────────────────┘
-```
+### Technical Indicators
+- Professional-grade calculations (RSI, MACD, Bollinger Bands, ATR, VWAP)
+- Real-time data aggregation from multiple sources
+- Comprehensive caching strategy for optimal performance
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-
-- Node.js 18+ and Python 3.9+
-- Docker and Docker Compose
-- PostgreSQL 14+ (or Supabase account)
-- Redis 6+
-- API Keys (see Configuration section)
+- Node.js 18+ and npm
+- API keys (optional, demo mode available)
 
 ### Installation
 
-1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/tradingbot.git
-cd tradingbot
-```
+# Clone the repository
+git clone https://github.com/Jkinney331/crypto-trading-bot-ai.git
+cd crypto-trading-bot-ai
 
-2. **Install dependencies**
-```bash
-# Frontend dependencies
+# Install dependencies
 npm install
 
-# Backend dependencies
-cd backend
-npm install
-pip install -r requirements.txt
-```
-
-3. **Set up environment variables**
-```bash
+# Create environment file
 cp .env.example .env
-# Edit .env with your configuration
+
+# Start development server
+npm run dev
 ```
 
-4. **Run database migrations**
-```bash
-npm run migrate
-```
+### Environment Setup
 
-5. **Start the development environment**
-```bash
-# Using Docker Compose (recommended)
-docker-compose up -d
-
-# Or run services individually
-npm run dev                 # Frontend
-npm run backend:start       # Backend services
-python backend/rl-service/integration/rl_service.py  # RL service
-```
-
-6. **Access the application**
-- Frontend: http://localhost:5173
-- API: http://localhost:8000
-- Grafana: http://localhost:3000 (admin/admin)
-
-## ⚙️ Configuration
-
-### Required API Keys
-
-Add these to your `.env` file or configure in Settings:
+Create a `.env` file with your API keys:
 
 ```env
-# Trading
+# Core APIs
+VITE_GROQ_API_KEY=your_groq_api_key
 VITE_ALPACA_API_KEY=your_alpaca_key
 VITE_ALPACA_SECRET_KEY=your_alpaca_secret
-
-# Market Data
 VITE_COINGECKO_API_KEY=your_coingecko_key
 
-# On-Chain Data (Optional but recommended)
-ETHERSCAN_API_KEY=your_etherscan_key
-BITQUERY_API_KEY=your_bitquery_key
-VITE_WHALE_ALERT_API_KEY=your_whalealert_key
+# Optional APIs
+VITE_WHALE_ALERT_API_KEY=your_whale_alert_key
+VITE_ETHERSCAN_API_KEY=your_etherscan_key
+VITE_BITQUERY_TOKEN=your_bitquery_token
+VITE_COINGLASS_API_KEY=your_coinglass_key
 
-# Database
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_key
+# Supabase (optional, demo mode available)
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
 
-# AI
-VITE_GROQ_API_KEY=your_groq_key
-
-# Monitoring
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
+# Configuration
+VITE_PORT=3001
 ```
 
-## 💡 How It Works
+## 📊 Architecture
 
-### 1. Data Collection & Processing
-The system continuously collects data from multiple sources:
-- **Market Data**: Real-time prices, order books, trades
-- **On-Chain Data**: Whale movements, smart money flows
-- **Alternative Data**: Sentiment, news, funding rates
+### Frontend Stack
+- **React 18** with TypeScript
+- **Vite** for fast development
+- **TailwindCSS** for styling
+- **Lucide React** for icons
 
-### 2. Feature Engineering
-Raw data is processed into 50+ features:
-- Technical indicators (RSI, MACD, Bollinger Bands)
-- Market microstructure (order book imbalance, liquidity)
-- Sentiment scores and on-chain metrics
-- Cross-asset correlations
+### Backend Services
+- **Groq AI** for intelligent reasoning
+- **Alpaca Markets** for paper trading
+- **CoinGecko** for market data
+- **Supabase** for data persistence
 
-### 3. Reinforcement Learning Decision Making
-Multiple specialized agents analyze features:
-- **Conservative Agent**: Focus on capital preservation
-- **Aggressive Agent**: Maximize returns in trending markets
-- **Balanced Agent**: Optimize risk-adjusted returns
-- **Contrarian Agent**: Trade mean reversions
+### Key Components
 
-### 4. Meta-Agent Orchestration
-A meta-agent selects the best strategy based on:
-- Current market regime (bull/bear/sideways/volatile)
-- Recent performance of each agent
-- Risk constraints and portfolio status
+```
+src/
+├── components/
+│   ├── Dashboard/
+│   │   ├── PortfolioAnalytics.tsx    # Advanced metrics
+│   │   ├── TradeHistory.tsx          # Trade tracking
+│   │   ├── CorrelationHeatmap.tsx    # Risk visualization
+│   │   └── AutoTradeActivity.tsx     # Live trading feed
+│   └── ui/
+│       └── ConfirmDialog.tsx         # Safety confirmations
+├── services/
+│   ├── ai/
+│   │   └── groqReasoningEngine.ts    # AI decision engine
+│   ├── analytics/
+│   │   └── portfolioAnalytics.ts     # Performance calculations
+│   ├── data/
+│   │   ├── dataAggregator.ts         # Multi-source aggregation
+│   │   └── fundingRatesService.ts    # Exchange funding rates
+│   └── indicators/
+│       └── technicalIndicators.ts    # TA calculations
+```
 
-### 5. Risk Management
-Before execution, all trades pass through risk checks:
-- Position sizing based on Kelly Criterion
-- Maximum drawdown enforcement
-- Correlation-based exposure limits
-- Circuit breakers for emergency stops
+## 🧠 AI Trading Logic
 
-### 6. Order Execution
-Optimized execution pipeline ensures:
-- Sub-100ms latency from decision to order
-- Smart order routing for best fills
-- Slippage minimization
-- Transaction cost optimization
+The bot uses a sophisticated multi-validator system:
 
-### 7. Performance Monitoring
-Real-time tracking of:
-- Portfolio performance and P&L
-- Risk metrics (VaR, Sharpe, drawdown)
-- Agent accuracy and decision quality
-- System health and latency
+1. **Technical Analysis**: RSI, MACD, Moving Averages
+2. **Momentum Analysis**: 24h price change and volume
+3. **Sentiment Analysis**: AI-powered market sentiment
+4. **On-Chain Metrics**: Network activity indicators
+5. **Market Position**: Market cap ranking analysis
+6. **Funding Rates**: Perpetual futures overleveraging detection
 
-## 🎯 Trading Strategies
+Each validator contributes to a confidence score (0-100), with trades executed only when:
+- Multiple validators agree
+- Risk/reward ratio exceeds 2:1
+- Market hours are active (or override enabled)
+- Confirmation thresholds are met
 
-### Liquidity Hunting
-Identifies and exploits order book inefficiencies:
-- Detects large hidden orders (icebergs)
-- Finds liquidity pools and imbalances
-- Tracks order cancellation patterns
+## 🔒 Security Features
 
-### Smart Money Divergence
-Follows institutional flows:
-- Monitors wallets >$1M
-- Tracks exchange inflows/outflows
-- Identifies accumulation despite price drops
+- **Confirmation Dialogs**: Critical actions require explicit confirmation
+- **Large Order Protection**: Orders >$10,000 trigger warnings
+- **API Key Management**: Secure storage with retry logic
+- **Demo Mode**: Safe testing without real funds
+- **Position Limits**: Maximum 10% portfolio allocation per trade
 
-### Volume Profile Analysis
-Advanced market structure analysis:
-- VPVR (Volume Profile Visible Range)
-- Point of Control identification
-- High/Low volume node detection
+## 📈 Performance Metrics
 
-### Cross-Asset Correlation
-Portfolio optimization through:
-- 50+ asset correlation tracking
-- Regime change detection
-- Risk-adjusted position sizing
+The system tracks comprehensive performance indicators:
 
-## 📊 Monitoring & Dashboards
+- **Sharpe Ratio**: Risk-adjusted returns
+- **Sortino Ratio**: Downside deviation focus
+- **Maximum Drawdown**: Peak-to-trough decline
+- **Win Rate**: Percentage of profitable trades
+- **Profit Factor**: Gross profits vs losses
+- **Alpha/Beta**: Market outperformance metrics
 
-### Grafana Dashboards
+## 🛠️ Development
 
-1. **Trading Performance**
-   - Portfolio value and P&L
-   - Trade history and win rate
-   - Strategy performance comparison
+### Available Scripts
 
-2. **Risk Metrics**
-   - Real-time VaR and drawdown
-   - Position concentration
-   - Correlation heatmaps
-
-3. **System Health**
-   - Service status and uptime
-   - API latency and errors
-   - Resource utilization
-
-4. **Agent Performance**
-   - Individual agent returns
-   - Ensemble accuracy
-   - Market regime detection
-
-### Telegram Notifications
-- Trade executions
-- Risk alerts
-- Performance summaries
-- System warnings
-
-## 🧪 Testing
-
-### Run Tests
 ```bash
-# All tests
-npm test
-
-# Specific test suites
-npm run test:unit
-npm run test:integration
-npm run test:performance
-
-# Python tests
-pytest backend/tests/
-
-# Final validation
-python backend/tests/final/run_final_tests.py
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run preview      # Preview production build
+npm run lint         # Run ESLint
+npm run type-check   # Run TypeScript checks
 ```
 
-### Test Coverage
-- Unit Tests: >80% coverage
-- Integration Tests: Complete workflows
-- Performance Tests: Load and latency
-- Security Tests: Vulnerability scanning
+### Testing
 
-## 🚀 Production Deployment
-
-### Using Docker Compose
 ```bash
-docker-compose -f backend/production/deployment/docker-compose.prod.yml up -d
+npm test             # Run test suite
+npm run test:watch   # Watch mode
+npm run test:coverage # Coverage report
 ```
 
-### Using Kubernetes
-```bash
-# Apply all manifests
-kubectl apply -f backend/production/deployment/kubernetes/
+## 📝 Configuration
 
-# Or use the deployment script
-./backend/production/deployment/scripts/deploy.sh production
-```
+### Trading Parameters
 
-### Cloud Deployment
+Edit `src/services/tradingAgent.ts` for:
+- Confidence thresholds
+- Position sizing
+- Cooldown periods
+- Symbol watchlists
 
-#### AWS
-```bash
-# Configure AWS credentials
-aws configure
+### Market Hours
 
-# Deploy to EKS
-eksctl create cluster -f eks-cluster.yaml
-kubectl apply -f backend/production/deployment/kubernetes/
-```
-
-#### Google Cloud
-```bash
-# Configure GCP
-gcloud init
-
-# Deploy to GKE
-gcloud container clusters create trading-bot --num-nodes=3
-kubectl apply -f backend/production/deployment/kubernetes/
-```
-
-## 📈 Performance Optimization
-
-### Latency Optimization
-- Numba JIT compilation for calculations
-- Redis caching for features
-- Connection pooling for APIs
-- Async/await throughout
-
-### Scalability
-- Horizontal pod autoscaling
-- Load balancing across services
-- Database connection pooling
-- Message queue for async tasks
-
-## 🔒 Security
-
-### API Key Management
-- Client-side AES encryption
-- Secure storage in Supabase
-- Environment variable fallbacks
-- Rotation capabilities
-
-### Access Control
-- Row-level security (RLS)
-- JWT authentication
-- Rate limiting
-- Audit logging
-
-## 📚 Documentation
-
-- [Requirements Checklist](./REQUIREMENTS_CHECKLIST.md) - Complete requirements validation
-- [Architecture Decisions](./ARCHITECTURE_DECISIONS.md) - Technical choices explained
-- [Phase Documentation](./PHASE_HANDOFF_DOCUMENTATION.md) - Development phases
-- [API Documentation](./backend/API_ENDPOINTS.md) - REST API reference
-- [Testing Guide](./TESTING_GUIDE_PHASE1.md) - Testing procedures
+Configure in `src/services/tradingSchedule.ts`:
+- Trading windows (default: 9 AM - 6 PM EST)
+- Weekend/holiday handling
+- Override capabilities
 
 ## 🤝 Contributing
 
-Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📄 License
 
-This project is proprietary software. All rights reserved.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- Built with React, Node.js, Python, and TensorFlow
-- Reinforcement Learning using Stable-Baselines3
-- Market data from Alpaca, CoinGecko, and others
-- Monitoring with Prometheus and Grafana
+- **Groq** for lightning-fast AI inference
+- **Alpaca Markets** for paper trading capabilities
+- **CoinGecko** for comprehensive market data
+- **Claude** for development assistance
+
+## ⚠️ Disclaimer
+
+This bot is for educational and research purposes only. Cryptocurrency trading carries significant risk. Always do your own research and never invest more than you can afford to lose.
 
 ## 📞 Support
 
-For support, please create an issue in the GitHub repository or contact the development team.
+For issues and questions:
+- Open an issue on [GitHub](https://github.com/Jkinney331/crypto-trading-bot-ai/issues)
+- Check the [Wiki](https://github.com/Jkinney331/crypto-trading-bot-ai/wiki) for documentation
 
 ---
 
-**⚠️ Disclaimer**: This bot is for educational and research purposes. Cryptocurrency trading carries significant risk. Past performance does not guarantee future results. Always conduct your own research and consider your risk tolerance before trading.
-
----
-
-Built with ❤️ by the Trading Bot Team
-
-🤖 Generated with Claude Code
-
-Co-Authored-By: Claude <noreply@anthropic.com>
+Built with ❤️ by the AI Crypto Trading Team
