@@ -115,3 +115,5 @@ export const FearGreedIndexWidget: React.FC = () => {
     </div>
   );
 };
+
+export { FearGreedIndexWidget as FearGreedIndex };

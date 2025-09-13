@@ -26,20 +26,33 @@ export const DraggableGrid: React.FC<DraggableGridProps> = ({ widgets, onLayoutC
   const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>({});
   const [currentBreakpoint, setCurrentBreakpoint] = useState('lg');
 
-  // Default layout configuration with proper spacing
+  // Default layout configuration with proper spacing for v2.0 widgets (8 widgets)
   const getDefaultLayout = (): Layout[] => {
-    return [
-      { i: 'account-summary', x: 0, y: 0, w: 12, h: 4, minW: 6, minH: 3, static: false },
-      { i: 'positions', x: 0, y: 4, w: 6, h: 8, minW: 4, minH: 6, static: false },
-      { i: 'watchlist', x: 6, y: 4, w: 6, h: 8, minW: 4, minH: 6, static: false },
-      { i: 'orders', x: 0, y: 12, w: 8, h: 7, minW: 6, minH: 5, static: false },
-      { i: 'fear-greed', x: 8, y: 12, w: 4, h: 7, minW: 3, minH: 5, static: false },
-      { i: 'trading-controls', x: 0, y: 19, w: 6, h: 10, minW: 4, minH: 8, static: false },
-      { i: 'trading-signals', x: 6, y: 19, w: 6, h: 10, minW: 4, minH: 8, static: false },
-      { i: 'auto-trade-activity', x: 0, y: 29, w: 12, h: 24, minW: 10, minH: 16, static: false },
-      { i: 'auto-trade-settings', x: 0, y: 53, w: 6, h: 12, minW: 4, minH: 8, static: false },
-      { i: 'market-insights', x: 0, y: 65, w: 12, h: 52, minW: 10, minH: 38, static: false },
-    ];
+    // Dynamically create layout based on passed widgets
+    const defaultLayouts: { [key: string]: Layout } = {
+      'portfolio-value': { i: 'portfolio-value', x: 0, y: 0, w: 8, h: 6, minW: 6, minH: 4, static: false },
+      'portfolio-analytics': { i: 'portfolio-analytics', x: 8, y: 0, w: 4, h: 6, minW: 3, minH: 4, static: false },
+      'trading-signals': { i: 'trading-signals', x: 0, y: 6, w: 6, h: 10, minW: 4, minH: 8, static: false },
+      'performance-calendar': { i: 'performance-calendar', x: 6, y: 6, w: 6, h: 10, minW: 4, minH: 8, static: false },
+      'fear-greed': { i: 'fear-greed', x: 0, y: 16, w: 4, h: 7, minW: 3, minH: 5, static: false },
+      'recent-trades': { i: 'recent-trades', x: 4, y: 16, w: 8, h: 7, minW: 6, minH: 5, static: false },
+      'market-insights': { i: 'market-insights', x: 0, y: 23, w: 12, h: 12, minW: 8, minH: 10, static: false },
+      'whale-alerts': { i: 'whale-alerts', x: 0, y: 35, w: 12, h: 8, minW: 6, minH: 6, static: false },
+    };
+    
+    // Return layouts for widgets that actually exist
+    return widgets.map(widget => 
+      defaultLayouts[widget.id] || { 
+        i: widget.id, 
+        x: 0, 
+        y: 0, 
+        w: 6, 
+        h: 6, 
+        minW: 3, 
+        minH: 4, 
+        static: false 
+      }
+    );
   };
 
   // Function to check if two items overlap

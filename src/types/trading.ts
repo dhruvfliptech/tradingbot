@@ -42,8 +42,11 @@ export interface CryptoData {
   change: number;
   changePercent: number;
   volume: number;
+  volume24h?: number;
   high: number;
   low: number;
+  high24h?: number;
+  low24h?: number;
   market_cap: number;
   market_cap_rank: number;
   price_change_24h: number;
@@ -58,20 +61,24 @@ export interface CryptoData {
 
 export interface TradingSignal {
   symbol: string;
-  name: string;
+  name?: string;
   action: 'BUY' | 'SELL' | 'HOLD';
   confidence: number;
-  reason: string;
+  reason?: string;
   timestamp: string;
+  price?: number;
   price_target?: number;
   stop_loss?: number;
-  current_price: number;
-  rsi: number;
-  macd: number;
-  ma20: number;
-  ma50: number;
-  volume_indicator: string;
-  trend: 'Bullish' | 'Bearish' | 'Neutral';
+  current_price?: number;
+  rsi?: number;
+  macd?: number;
+  ma20?: number;
+  ma50?: number;
+  volume_indicator?: string;
+  trend?: 'Bullish' | 'Bearish' | 'Neutral';
+  maIndicator?: 'bullish' | 'bearish' | 'neutral';
+  technicalScore?: number;
+  validationDetails?: any;
 }
 
 export interface PerformanceMetrics {

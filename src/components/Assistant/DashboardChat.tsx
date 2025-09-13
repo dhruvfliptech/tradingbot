@@ -12,6 +12,7 @@ interface DashboardChatProps {
   cryptoData: CryptoData[];
   apiStatuses: Record<string, 'connected' | 'error' | 'checking'>;
   onPostTrade?: () => void;
+  embedded?: boolean;
 }
 
 interface ChatMessage {
@@ -26,8 +27,9 @@ export const DashboardChat: React.FC<DashboardChatProps> = ({
   cryptoData,
   apiStatuses,
   onPostTrade,
+  embedded = false,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(embedded);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -176,6 +178,52 @@ export const DashboardChat: React.FC<DashboardChatProps> = ({
     }
   };
 
+  // Embedded mode: render directly without floating button
+  if (embedded) {
+    return (
+      <div className="h-full bg-gray-900 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.map((m, idx) => (
+            <div key={idx} className={m.role === 'user' ? 'text-right' : 'text-left'}>
+              <div
+                className={
+                  'inline-block rounded-lg px-3 py-2 whitespace-pre-wrap ' +
+                  (m.role === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-100 border border-gray-700')
+                }
+              >
+                {m.content}
+              </div>
+            </div>
+          ))}
+          <div ref={endRef} />
+        </div>
+        <div className="p-3 border-t border-gray-700 bg-gray-850">
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={sending ? 'Thinking…' : 'Ask about trading strategies, market analysis, or agent decisions…'}
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              disabled={sending}
+            />
+            <button
+              onClick={ask}
+              disabled={sending || !input.trim()}
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg flex items-center"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Floating mode: render with toggle button
   return (
     <>
       {/* Toggle Button */}
