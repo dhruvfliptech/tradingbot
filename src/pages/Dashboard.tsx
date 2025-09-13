@@ -11,6 +11,13 @@ import { OrdersTable } from '../components/Dashboard/OrdersTable';
 import { PerformanceCalendar } from '../components/Dashboard/PerformanceCalendar';
 import { MarketInsights } from '../components/Dashboard/MarketInsights';
 import { PortfolioAnalyticsCompact } from '../components/Dashboard/PortfolioAnalyticsCompact';
+import { StrategyControlPanel } from '../components/Dashboard/StrategyControlPanel';
+import { TradeManagement } from '../components/Dashboard/TradeManagement';
+import { ExportReporting } from '../components/Dashboard/ExportReporting';
+import StrategySignals from '../components/Dashboard/StrategySignals';
+import TargetTracker from '../components/Dashboard/TargetTracker';
+import OnChainMetrics from '../components/Dashboard/OnChainMetrics';
+import { WidgetErrorBoundary } from '../components/ErrorBoundary';
 import { tradingAgentV2 as tradingAgent } from '../services/tradingAgentV2';
 import { fetchWhaleAlerts, WhaleTx } from '../services/whaleAlertsService';
 import { GlobalMarketHeader } from '../components/Dashboard/GlobalMarketHeader';
@@ -234,7 +241,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Dashboard widgets configuration - 8 key widgets for v2.0
+  // Dashboard widgets configuration - Enhanced with new strategy widgets
   const dashboardWidgets = [
     {
       id: 'portfolio-value',
@@ -265,6 +272,33 @@ export const Dashboard: React.FC = () => {
       ),
     },
     {
+      id: 'strategy-signals',
+      title: 'Strategy Signals (4 Advanced Strategies)',
+      component: (
+        <WidgetErrorBoundary widgetName="Strategy Signals">
+          <StrategySignals />
+        </WidgetErrorBoundary>
+      ),
+    },
+    {
+      id: 'target-tracker',
+      title: 'Weekly Target Tracker (3-5% Target)',
+      component: (
+        <WidgetErrorBoundary widgetName="Target Tracker">
+          <TargetTracker />
+        </WidgetErrorBoundary>
+      ),
+    },
+    {
+      id: 'on-chain-metrics',
+      title: 'On-Chain Metrics & Whale Activity',
+      component: (
+        <WidgetErrorBoundary widgetName="On-Chain Metrics">
+          <OnChainMetrics />
+        </WidgetErrorBoundary>
+      ),
+    },
+    {
       id: 'trading-signals',
       title: 'AI Trading Signals',
       component: <TradingSignals cryptoData={cryptoData} />,
@@ -273,6 +307,33 @@ export const Dashboard: React.FC = () => {
       id: 'performance-calendar',
       title: 'Performance Calendar',
       component: <PerformanceCalendar />,
+    },
+    {
+      id: 'strategy-control',
+      title: 'Strategy Control Panel',
+      component: (
+        <WidgetErrorBoundary widgetName="Strategy Control">
+          <StrategyControlPanel />
+        </WidgetErrorBoundary>
+      ),
+    },
+    {
+      id: 'trade-management',
+      title: 'Trade Management',
+      component: (
+        <WidgetErrorBoundary widgetName="Trade Management">
+          <TradeManagement />
+        </WidgetErrorBoundary>
+      ),
+    },
+    {
+      id: 'export-reporting',
+      title: 'Export & Reports',
+      component: (
+        <WidgetErrorBoundary widgetName="Export Reporting">
+          <ExportReporting />
+        </WidgetErrorBoundary>
+      ),
     },
     {
       id: 'fear-greed',

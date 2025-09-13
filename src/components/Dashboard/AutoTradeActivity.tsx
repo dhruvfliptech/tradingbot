@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Zap, CheckCircle2, AlertTriangle, Brain, LineChart, BarChart3 } from 'lucide-react';
-import { tradingAgent, AgentEvent } from '../../services/tradingAgent';
+import { tradingAgentV2 as tradingAgent, AgentEvent } from '../../services/tradingAgentV2';
 
 export const AutoTradeActivity: React.FC = () => {
   const [events, setEvents] = useState<AgentEvent[]>([]);

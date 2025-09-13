@@ -3,7 +3,7 @@ import { MessageSquare, X, Send, ChevronDown } from 'lucide-react';
 import { Account, Position, Order, CryptoData } from '../../types/trading';
 import { askDashboardAssistant } from '../../services/groqService';
 import { alpacaService } from '../../services/alpacaService';
-import { tradingAgent } from '../../services/tradingAgent';
+import { tradingAgentV2 as tradingAgent } from '../../services/tradingAgentV2';
 
 interface DashboardChatProps {
   account: Account | null;

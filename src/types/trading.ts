@@ -79,6 +79,12 @@ export interface TradingSignal {
   maIndicator?: 'bullish' | 'bearish' | 'neutral';
   technicalScore?: number;
   validationDetails?: any;
+  strategySignals?: {
+    liquidity?: any;
+    smartMoney?: any;
+    volumeProfile?: any;
+    microstructure?: any;
+  };
 }
 
 export interface PerformanceMetrics {
