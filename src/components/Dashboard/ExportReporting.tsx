@@ -343,4 +343,5 @@ const ExportReporting: React.FC = () => {
   );
 };
 
+export { ExportReporting };
 export default ExportReporting;

@@ -414,4 +414,5 @@ const StrategyControlPanel: React.FC = () => {
   );
 };
 
+export { StrategyControlPanel };
 export default StrategyControlPanel;

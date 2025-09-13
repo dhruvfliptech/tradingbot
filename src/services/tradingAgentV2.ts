@@ -1,5 +1,4 @@
 import { TradingSignal, CryptoData } from '../types/trading';
-import { riskManager } from './riskManager';
 import { coinGeckoService } from './coinGeckoService';
 import { alpacaService } from './alpacaService';
 import { groqService } from './groqService';
@@ -476,7 +475,7 @@ class TradingAgentV2 {
 
       // Integrate strategy signals (30% weight for strategies, 70% for validators)
       const strategyScore = this.calculateStrategyScore(strategySignals);
-      const combinedConfidence = Math.round(baseConfidence * 0.7 + strategyScore * 0.3);
+      let combinedConfidence = Math.round(baseConfidence * 0.7 + strategyScore * 0.3);
       
       // Enhanced strategy execution logic - if strategies provide strong signals, execute
       if (strategyScore > 75) {

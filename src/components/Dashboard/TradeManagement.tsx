@@ -563,4 +563,5 @@ const TradeManagement: React.FC = () => {
   );
 };
 
+export { TradeManagement };
 export default TradeManagement;

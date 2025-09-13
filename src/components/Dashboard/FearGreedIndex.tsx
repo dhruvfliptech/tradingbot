@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
-import { FearGreedIndex } from '../../types/trading';
+import { FearGreedIndex as FearGreedIndexData } from '../../types/trading';
 import { coinGeckoService } from '../../services/coinGeckoService';
 
 export const FearGreedIndexWidget: React.FC = () => {
-  const [fearGreedData, setFearGreedData] = useState<FearGreedIndex | null>(null);
+  const [fearGreedData, setFearGreedData] = useState<FearGreedIndexData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -116,4 +116,4 @@ export const FearGreedIndexWidget: React.FC = () => {
   );
 };
 
-export { FearGreedIndexWidget as FearGreedIndex };
+export default FearGreedIndexWidget;

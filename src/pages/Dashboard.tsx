@@ -6,7 +6,7 @@ import { AccountSummary } from '../components/Dashboard/AccountSummary';
 import { PositionsTable } from '../components/Dashboard/PositionsTable';
 import { MarketWatchlist } from '../components/Dashboard/MarketWatchlist';
 import { TradingSignals } from '../components/Dashboard/TradingSignals';
-import { FearGreedIndex } from '../components/Dashboard/FearGreedIndex';
+import { FearGreedIndexWidget } from '../components/Dashboard/FearGreedIndex';
 import { OrdersTable } from '../components/Dashboard/OrdersTable';
 import { PerformanceCalendar } from '../components/Dashboard/PerformanceCalendar';
 import { MarketInsights } from '../components/Dashboard/MarketInsights';
@@ -99,7 +99,7 @@ export const Dashboard: React.FC = () => {
     const alpacaInterval = setInterval(refreshAlpaca, 60 * 1000); // 60s
 
     // Subscribe to auto-trader
-    const unsub = tradingAgentV2.subscribe((e) => {
+    const unsub = tradingAgent.subscribe((e) => {
       if (e.type === 'order_submitted') {
         refreshAlpaca();
       }
@@ -338,7 +338,7 @@ export const Dashboard: React.FC = () => {
     {
       id: 'fear-greed',
       title: 'Fear & Greed Index',
-      component: <FearGreedIndex />,
+      component: <FearGreedIndexWidget />,
     },
     {
       id: 'portfolio-analytics',
