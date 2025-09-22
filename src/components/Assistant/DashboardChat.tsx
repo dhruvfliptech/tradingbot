@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { MessageSquare, X, Send, ChevronDown } from 'lucide-react';
 import { Account, Position, Order, CryptoData } from '../../types/trading';
 import { askDashboardAssistant } from '../../services/groqService';
-import { alpacaService } from '../../services/alpacaService';
+import { tradingProviderService } from '../../services/tradingProviderService';
 import { tradingAgentV2 as tradingAgent } from '../../services/tradingAgentV2';
 
 interface DashboardChatProps {
@@ -92,7 +92,7 @@ export const DashboardChat: React.FC<DashboardChatProps> = ({
     }
     // Sell all / close all
     if (/(sell|close)\s+(all|everything)|all of them/.test(lower)) {
-      const livePositions = await alpacaService.getPositions();
+      const livePositions = await tradingProviderService.getPositions();
       if (!livePositions || livePositions.length === 0) {
         setMessages(prev => [...prev, { role: 'assistant', content: 'No open positions to sell.' }]);
         return true;
@@ -101,7 +101,7 @@ export const DashboardChat: React.FC<DashboardChatProps> = ({
         const symbol = normalizeSymbol((p as any).symbol || '');
         const qty = (p as any).qty || '0';
         if (!symbol || qty === '0') continue;
-        await alpacaService.placeOrder({ symbol, qty, side: 'sell', order_type: 'market' });
+        await tradingProviderService.placeOrder({ symbol, qty, side: 'sell', order_type: 'market' });
       }
       onPostTrade?.();
       setMessages(prev => [...prev, { role: 'assistant', content: 'Submitted market sell orders for all current positions.' }]);
@@ -115,7 +115,7 @@ export const DashboardChat: React.FC<DashboardChatProps> = ({
       const base = m[3];
       const symbol = normalizeSymbol(base);
       if (!symbol) return false;
-      await alpacaService.placeOrder({ symbol, qty, side, order_type: 'market' });
+      await tradingProviderService.placeOrder({ symbol, qty, side, order_type: 'market' });
       onPostTrade?.();
       setMessages(prev => [...prev, { role: 'assistant', content: `Order placed: ${side.toUpperCase()} ${qty} ${symbol} (market).` }]);
       return true;

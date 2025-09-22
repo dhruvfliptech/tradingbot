@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Save, Sliders } from 'lucide-react';
 import { AgentSettings, agentSettingsService, DEFAULT_SETTINGS } from '../../services/agentSettingsService';
+import { useTradingProvider } from '../../hooks/useTradingProvider';
 
 export const AutoTradeSettings: React.FC = () => {
   const [settings, setSettings] = useState<AgentSettings>(DEFAULT_SETTINGS);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+
+  const { activeProvider, providers, setActiveProvider } = useTradingProvider();
 
   useEffect(() => {
     (async () => {
@@ -31,6 +34,47 @@ export const AutoTradeSettings: React.FC = () => {
         </button>
       </div>
 
+      <div className="mb-6">
+        <h3 className="text-sm text-gray-400 mb-2">Trading Broker</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {providers.map((provider) => {
+            const isActive = provider.id === activeProvider;
+            const modeBadge = provider.features.liveTrading
+              ? { label: 'Live Trading', className: 'bg-red-500/20 text-red-300' }
+              : { label: 'Paper Trading', className: 'bg-green-500/20 text-green-300' };
+            return (
+              <button
+                key={provider.id}
+                onClick={() => setActiveProvider(provider.id)}
+                className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                  isActive ? 'border-blue-500 bg-gray-900' : 'border-gray-700 bg-gray-800 hover:border-blue-500/40'
+                }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-white font-semibold">{provider.label}</p>
+                    <p className="text-xs text-gray-400 mt-1">{provider.description}</p>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${modeBadge.className}`}
+                  >
+                    {modeBadge.label}
+                  </span>
+                </div>
+                <div className="flex items-center text-xs text-gray-400 space-x-3">
+                  <span className="flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 mr-1" />
+                    {provider.features.supportsCrypto ? 'Crypto' : 'No Crypto'}
+                  </span>
+                  {provider.features.supportsEquities && (
+                    <span className="flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-sky-400 mr-1" />Equities
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-gray-400 text-xs sm:text-sm mb-2">Per-Trade Risk Budget (USD)</label>

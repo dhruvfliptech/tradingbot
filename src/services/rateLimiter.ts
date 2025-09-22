@@ -59,6 +59,12 @@ class RateLimiter {
       delayMs: 300,
     });
 
+    this.limits.set('binance', {
+      maxRequests: 1200,
+      windowMs: 60000, // 1200 weight per minute (Binance default)
+      delayMs: 50,
+    });
+
     this.limits.set('groq', {
       maxRequests: 30,
       windowMs: 60000, // 30 requests per minute

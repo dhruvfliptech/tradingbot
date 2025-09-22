@@ -203,6 +203,13 @@ class TradeHistoryService {
   }
 
   /**
+   * Get recent trades (alias for getTradeHistory with limit)
+   */
+  async getRecentTrades(limit: number = 50): Promise<TradeRecord[]> {
+    return this.getTradeHistory({ limit });
+  }
+
+  /**
    * Get open positions
    */
   async getOpenPositions(): Promise<TradeRecord[]> {

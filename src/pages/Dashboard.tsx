@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { Activity, Bitcoin, LogOut, User, Wifi, WifiOff, AlertCircle, Fish, X, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react';
 import { DraggableGrid } from '../components/Dashboard/DraggableGrid';
@@ -26,9 +27,10 @@ import { ApiStatusModal } from '../components/Settings/ApiStatusModal';
 import { SettingsModal } from '../components/Settings/SettingsModal';
 import { useAuth } from '../hooks/useAuth';
 import { useVirtualPortfolio } from '../hooks/useVirtualPortfolio';
+import { useTradingProvider } from '../hooks/useTradingProvider';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { useWebSocket } from '../services/websocketService';
-import { alpacaService } from '../services/alpacaService';
+import { tradingProviderService } from '../services/tradingProviderService';
 import { coinGeckoService } from '../services/coinGeckoService';
 import { supabase } from '../lib/supabase';
 import { Account, Position, Order, CryptoData } from '../types/trading';
@@ -47,15 +49,19 @@ export const Dashboard: React.FC = () => {
   const [whaleLoading, setWhaleLoading] = useState(false);
   const [whaleLastFetched, setWhaleLastFetched] = useState<number>(0);
   const [apiStatuses, setApiStatuses] = useState({
-    alpaca: 'checking' as 'connected' | 'error' | 'checking',
+    broker: 'checking' as 'connected' | 'error' | 'checking',
     coingecko: 'checking' as 'connected' | 'error' | 'checking',
     supabase: 'checking' as 'connected' | 'error' | 'checking',
   });
+  const [portfolioHistory, setPortfolioHistory] = useState<Array<{ date: string; value: number; pnl: number }>>([]);
+  const [portfolioHistoryLoading, setPortfolioHistoryLoading] = useState(false);
   
   const { user, signOut } = useAuth();
-  const { stats: portfolioStats } = useVirtualPortfolio();
+  const { portfolio, stats: portfolioStats, getPerformanceHistory } = useVirtualPortfolio();
   const { preserveScroll } = useScrollPreservation(orders);
   const { lastMessage, isConnected: wsConnected } = useWebSocket('trade_executed');
+  const { activeProvider } = useTradingProvider();
+
 
   // Handle WebSocket trade messages with scroll preservation
   useEffect(() => {
@@ -66,6 +72,37 @@ export const Dashboard: React.FC = () => {
       });
     }
   }, [lastMessage]);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHistory = async () => {
+      setPortfolioHistoryLoading(true);
+      try {
+        const history = await getPerformanceHistory(30);
+        if (!cancelled) {
+          setPortfolioHistory(history ?? []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPortfolioHistory([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setPortfolioHistoryLoading(false);
+        }
+      }
+    };
+
+    loadHistory();
+    const historyInterval = setInterval(loadHistory, 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(historyInterval);
+    };
+  }, [getPerformanceHistory, portfolio?.id]);
 
   useEffect(() => {
     fetchData();
@@ -80,28 +117,30 @@ export const Dashboard: React.FC = () => {
       }
     }, 30 * 1000); // 30s
 
-    const refreshAlpaca = async () => {
+    const refreshBroker = async () => {
       if (!user) return;
       try {
         const [accountData, positionsData, ordersData] = await Promise.all([
-          alpacaService.getAccount(),
-          alpacaService.getPositions(),
-          alpacaService.getOrders(),
+          tradingProviderService.getAccount(),
+          tradingProviderService.getPositions(),
+          tradingProviderService.getOrders(),
         ]);
         setAccount(accountData);
         setPositions(positionsData);
         setOrders(ordersData);
+        setApiStatuses((prev) => ({ ...prev, broker: 'connected' }));
       } catch (err) {
-        console.warn('Alpaca refresh failed:', err);
+        console.warn('Broker refresh failed:', err);
+        setApiStatuses((prev) => ({ ...prev, broker: 'error' }));
       }
     };
 
-    const alpacaInterval = setInterval(refreshAlpaca, 60 * 1000); // 60s
+    const brokerInterval = setInterval(refreshBroker, 60 * 1000); // 60s
 
     // Subscribe to auto-trader
     const unsub = tradingAgent.subscribe((e) => {
       if (e.type === 'order_submitted') {
-        refreshAlpaca();
+        refreshBroker();
       }
     });
 
@@ -114,11 +153,11 @@ export const Dashboard: React.FC = () => {
 
     return () => {
       clearInterval(cryptoInterval);
-      clearInterval(alpacaInterval);
+      clearInterval(brokerInterval);
       clearInterval(whaleInterval);
       unsub();
     };
-  }, [user, showWhalePanel]);
+  }, [user, showWhalePanel, activeProvider]);
 
   const fetchData = async () => {
     try {
@@ -135,9 +174,9 @@ export const Dashboard: React.FC = () => {
 
       // Then fetch other data
       const [accountData, positionsData, ordersData] = await Promise.all([
-        alpacaService.getAccount(),
-        alpacaService.getPositions(),
-        alpacaService.getOrders(),
+        tradingProviderService.getAccount(),
+        tradingProviderService.getPositions(),
+        tradingProviderService.getOrders(),
       ]);
 
       setAccount(accountData);
@@ -146,7 +185,7 @@ export const Dashboard: React.FC = () => {
       
       // Update API statuses
       setApiStatuses({
-        alpaca: 'connected',
+        broker: 'connected',
         coingecko: 'connected',
         supabase: 'connected',
       });
@@ -157,10 +196,10 @@ export const Dashboard: React.FC = () => {
       const newStatuses = { ...apiStatuses };
       
       try {
-        await alpacaService.getAccount();
-        newStatuses.alpaca = 'connected';
+        await tradingProviderService.getAccount();
+        newStatuses.broker = 'connected';
       } catch {
-        newStatuses.alpaca = 'error';
+        newStatuses.broker = 'error';
       }
       
       try {
@@ -208,9 +247,9 @@ export const Dashboard: React.FC = () => {
   const handleOrderPlaced = async () => {
     try {
       const [accountData, positionsData, ordersData] = await Promise.all([
-        alpacaService.getAccount(),
-        alpacaService.getPositions(),
-        alpacaService.getOrders(),
+        tradingProviderService.getAccount(),
+        tradingProviderService.getPositions(),
+        tradingProviderService.getOrders(),
       ]);
       setAccount(accountData);
       setPositions(positionsData);
@@ -229,16 +268,29 @@ export const Dashboard: React.FC = () => {
 
   const getOverallApiStatus = () => {
     const statuses = Object.values(apiStatuses);
-    const connectedCount = statuses.filter(status => status === 'connected').length;
-    const errorCount = statuses.filter(status => status === 'error').length;
-    
-    if (connectedCount === 3) {
+    const total = statuses.length;
+    const connectedCount = statuses.filter((status) => status === 'connected').length;
+    const errorCount = statuses.filter((status) => status === 'error').length;
+
+    if (connectedCount === total) {
       return { icon: Wifi, color: 'text-green-400', text: 'All APIs Connected' };
-    } else if (errorCount === 3) {
-      return { icon: WifiOff, color: 'text-red-400', text: 'All APIs Disconnected' };
-    } else {
-      return { icon: AlertCircle, color: 'text-yellow-400', text: 'Partial API Issues' };
     }
+    if (errorCount === total) {
+      return { icon: WifiOff, color: 'text-red-400', text: 'All APIs Disconnected' };
+    }
+    return { icon: AlertCircle, color: 'text-yellow-400', text: 'Partial API Issues' };
+  };
+
+  const formatHistoryDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+
+  const formatHistoryTooltipLabel = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   // Dashboard widgets configuration - Enhanced with new strategy widgets
@@ -265,8 +317,58 @@ export const Dashboard: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="h-32 bg-gray-800 rounded flex items-center justify-center text-gray-500">
-            [Portfolio value chart visualization]
+          <div className="h-48 bg-gray-800 rounded p-2">
+            {portfolioHistoryLoading ? (
+              <div className="w-full h-full rounded bg-gray-900 animate-pulse" />
+            ) : portfolioHistory.length === 0 ? (
+              <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
+                Portfolio history will appear once trades are recorded.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={portfolioHistory} margin={{ top: 8, right: 16, left: -12, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="portfolioValueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366F1" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#6366F1" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="rgba(148, 163, 184, 0.12)" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={formatHistoryDate}
+                    tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    width={70}
+                    tickFormatter={(value) => {
+                      const numericValue = Number(value);
+                      if (!Number.isFinite(numericValue)) return String(value);
+                      return `$${numericValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                    }}
+                    tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: '#6366F1', strokeWidth: 1, strokeOpacity: 0.25 }}
+                    formatter={(value: number | string) => {
+                      const numericValue = typeof value === 'number' ? value : Number(value);
+                      if (!Number.isFinite(numericValue)) {
+                        return [String(value), 'Balance'];
+                      }
+                      return [`$${numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Balance'];
+                    }}
+                    labelFormatter={formatHistoryTooltipLabel}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1f2937', color: '#e5e7eb', borderRadius: 8 }}
+                    itemStyle={{ color: '#e5e7eb' }}
+                  />
+                  <Area type="monotone" dataKey="value" stroke="#6366F1" strokeWidth={2} fill="url(#portfolioValueGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       ),

@@ -72,10 +72,10 @@ export const API_PROVIDERS = {
   binance: {
     name: 'Binance',
     keys: [
-      { name: 'api_key', label: 'API Key', required: false },
-      { name: 'secret_key', label: 'Secret Key', required: false },
+      { name: 'api_key', label: 'API Key', required: true },
+      { name: 'secret_key', label: 'Secret Key', required: true },
     ],
-    description: 'Binance exchange API (future implementation)',
+    description: 'Trade live crypto via Binance spot API',
   },
 } as const;
 
@@ -532,6 +532,15 @@ class ApiKeysService {
             isValid = await this.validateAlpacaKeys(apiKey, secretKey || '');
           }
           break;
+        case 'binance':
+          if (keyName === 'api_key') {
+            const secretKey = await this.getApiKey(provider, 'secret_key');
+            isValid = await this.validateBinanceKeys(apiKey, secretKey || '');
+          } else if (keyName === 'secret_key') {
+            const publicKey = await this.getApiKey(provider, 'api_key');
+            isValid = await this.validateBinanceKeys(publicKey || '', apiKey);
+          }
+          break;
         case 'groq':
           isValid = await this.validateGroqKey(apiKey);
           break;
@@ -578,6 +587,28 @@ class ApiKeysService {
     }
   }
 
+  private async validateBinanceKeys(apiKey: string, secretKey: string): Promise<boolean> {
+    if (!apiKey || !secretKey) return false;
+    try {
+      const baseUrl = (import.meta.env.VITE_BINANCE_BASE_URL || 'https://api.binance.com').replace(/\/$/, '');
+      const params = new URLSearchParams();
+      params.set('timestamp', Date.now().toString());
+      params.set('recvWindow', String(import.meta.env.VITE_BINANCE_RECV_WINDOW || 5000));
+      const signature = CryptoJS.HmacSHA256(params.toString(), secretKey).toString(CryptoJS.enc.Hex);
+      params.set('signature', signature);
+
+      const response = await fetch(`${baseUrl}/api/v3/account?${params.toString()}`, {
+        headers: {
+          'X-MBX-APIKEY': apiKey,
+        },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+
   private async validateGroqKey(apiKey: string): Promise<boolean> {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/models', {
@@ -602,6 +633,8 @@ class ApiKeysService {
       'coingecko.api_key': 'VITE_COINGECKO_API_KEY',
       'alpaca.api_key': 'VITE_ALPACA_API_KEY',
       'alpaca.secret_key': 'VITE_ALPACA_SECRET_KEY',
+      'binance.api_key': 'VITE_BINANCE_API_KEY',
+      'binance.secret_key': 'VITE_BINANCE_SECRET_KEY',
       'groq.api_key': 'VITE_GROQ_API_KEY',
       // Add more mappings as needed
     };

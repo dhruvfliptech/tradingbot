@@ -3,7 +3,7 @@
  * Handles partial profit taking, DCA entries, pyramid positioning, and risk management
  */
 
-import { alpacaService } from './alpacaService';
+import { tradingProviderService } from './tradingProviderService';
 import { tradeHistoryService } from './persistence/tradeHistoryService';
 
 export interface Position {
@@ -79,24 +79,34 @@ class PositionManager {
   }
 
   /**
-   * Load current positions from Alpaca
+   * Load current positions from configured broker
    */
   async loadPositions(): Promise<void> {
     try {
-      const alpacaPositions = await alpacaService.getPositions();
-      
-      for (const alpacaPos of alpacaPositions) {
+      const brokerPositions = await tradingProviderService.getPositions();
+
+      for (const brokerPos of brokerPositions) {
+        const qty = Math.abs(parseFloat(brokerPos.qty));
+        const marketValue = Number(brokerPos.market_value) || 0;
+        const costBasis = Number(brokerPos.cost_basis) || 0;
+        const avgEntry = (brokerPos as any).avg_entry_price
+          ? Number((brokerPos as any).avg_entry_price)
+          : qty > 0
+            ? costBasis / qty
+            : 0;
+        const currentPrice = qty > 0 ? marketValue / qty : 0;
+
         const position: Position = {
-          id: alpacaPos.asset_id || alpacaPos.symbol,
-          symbol: alpacaPos.symbol,
-          side: parseFloat(alpacaPos.qty) > 0 ? 'long' : 'short',
-          quantity: Math.abs(parseFloat(alpacaPos.qty)),
-          entry_price: parseFloat(alpacaPos.avg_entry_price || '0'),
-          current_price: parseFloat(alpacaPos.market_value || '0') / Math.abs(parseFloat(alpacaPos.qty)),
-          unrealized_pnl: parseFloat(alpacaPos.unrealized_pl || '0'),
-          risk_amount: 0, // Will be calculated
+          id: brokerPos.symbol,
+          symbol: brokerPos.symbol,
+          side: brokerPos.side,
+          quantity: qty,
+          entry_price: avgEntry,
+          current_price: currentPrice,
+          unrealized_pnl: Number(brokerPos.unrealized_pl ?? marketValue - costBasis),
+          risk_amount: 0,
           created_at: new Date().toISOString(),
-          strategy: 'unknown'
+          strategy: 'unknown',
         };
 
         this.positions.set(position.id, position);
@@ -201,13 +211,13 @@ class PositionManager {
     }
 
     try {
-      // Place additional order
-      const order = await alpacaService.placeOrder({
+      // Place additional order via broker
+      await tradingProviderService.placeOrder({
         symbol: position.symbol,
         qty: additionalQuantity,
         side: position.side === 'long' ? 'buy' : 'sell',
-        type: 'market',
-        time_in_force: 'day'
+        order_order_type: 'market',
+        time_in_force: 'day',
       });
 
       // Record the pyramid addition
@@ -357,11 +367,11 @@ class PositionManager {
       const quantityToClose = position.quantity * (rule.quantity_percentage / 100);
 
       // Place order to close portion of position
-      const order = await alpacaService.placeOrder({
+      await tradingProviderService.placeOrder({
         symbol: position.symbol,
         qty: quantityToClose,
         side: position.side === 'long' ? 'sell' : 'buy',
-        type: 'market',
+        order_type: 'market',
         time_in_force: 'day'
       });
 
@@ -407,11 +417,11 @@ class PositionManager {
 
       if (currentPrice <= nextEntryPrice) {
         // Execute DCA entry
-        const order = await alpacaService.placeOrder({
+        await tradingProviderService.placeOrder({
           symbol: dcaEntry.symbol,
           qty: dcaEntry.quantity,
           side: 'buy',
-          type: 'market',
+          order_type: 'market',
           time_in_force: 'day'
         });
 

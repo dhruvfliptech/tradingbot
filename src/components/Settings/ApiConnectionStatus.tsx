@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, AlertCircle } from 'lucide-react';
 import { API_PROVIDERS, apiKeysService } from '../../services/apiKeysService';
 import { coinGeckoService } from '../../services/coinGeckoService';
-import { alpacaService } from '../../services/alpacaService';
+import { tradingProviderService } from '../../services/tradingProviderService';
 import { groqService } from '../../services/groqService';
 import { supabase } from '../../lib/supabase';
 
@@ -30,8 +30,9 @@ export const ApiConnectionStatus: React.FC = () => {
           return true;
         
         case 'alpaca':
-          // Test Alpaca connection
-          await alpacaService.getAccount();
+        case 'binance':
+          // Test broker connection
+          await tradingProviderService.getAccount(provider as 'alpaca' | 'binance');
           return true;
         
         case 'groq':
@@ -52,7 +53,7 @@ export const ApiConnectionStatus: React.FC = () => {
     } catch (error) {
       console.warn(`API connectivity check failed for ${provider}:`, error);
       // For certain providers, fall back to environment variable check
-      if (['coingecko', 'alpaca', 'groq'].includes(provider)) {
+      if (['coingecko', 'alpaca', 'binance', 'groq'].includes(provider)) {
         const envKey = `VITE_${provider.toUpperCase()}_API_KEY`;
         return !!import.meta.env[envKey];
       }

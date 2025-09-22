@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, AlertCircle, RefreshCw, Settings, Wifi, WifiOff } from 'lucide-react';
-import { alpacaService } from '../../services/alpacaService';
+import { tradingProviderService } from '../../services/tradingProviderService';
+import { useTradingProvider } from '../../hooks/useTradingProvider';
 import { coinGeckoService } from '../../services/coinGeckoService';
 import { supabase } from '../../lib/supabase';
 
@@ -19,9 +20,14 @@ interface ApiStatus {
 }
 
 export const ApiStatusModal: React.FC<ApiStatusModalProps> = ({ isOpen, onClose }) => {
-  const [apiStatuses, setApiStatuses] = useState<ApiStatus[]>([
+  const { activeProvider, providers } = useTradingProvider();
+  const activeBrokerMeta = providers.find((meta) => meta.id === activeProvider);
+
+  const brokerDisplayName = activeBrokerMeta ? `${activeBrokerMeta.label} Trading API` : 'Trading Broker API';
+
+  const [apiStatuses, setApiStatuses] = useState<ApiStatus[]>(() => [
     {
-      name: 'Alpaca Trading API',
+      name: brokerDisplayName,
       status: 'checking',
       message: 'Checking connection...',
       lastChecked: new Date(),
@@ -46,23 +52,31 @@ export const ApiStatusModal: React.FC<ApiStatusModalProps> = ({ isOpen, onClose 
     },
   ]);
 
+  useEffect(() => {
+    setApiStatuses((prev) =>
+      prev.map((status, index) =>
+        index === 0 ? { ...status, name: brokerDisplayName } : status
+      )
+    );
+  }, [brokerDisplayName]);
+
   const checkApiStatus = async () => {
     const newStatuses = [...apiStatuses];
 
-    // Check Alpaca API
+    // Check trading broker API
     try {
-      await alpacaService.getAccount();
+      await tradingProviderService.getAccount();
       newStatuses[0] = {
-        name: 'Alpaca Trading API',
+        name: brokerDisplayName,
         status: 'connected',
-        message: 'Connected to paper trading account',
+        message: 'Connected to trading broker successfully',
         lastChecked: new Date(),
         icon: <CheckCircle className="h-5 w-5" />,
         color: 'text-green-400',
       };
     } catch (error) {
       newStatuses[0] = {
-        name: 'Alpaca Trading API',
+        name: brokerDisplayName,
         status: 'error',
         message: error instanceof Error ? error.message : 'Connection failed',
         lastChecked: new Date(),
@@ -126,13 +140,16 @@ export const ApiStatusModal: React.FC<ApiStatusModalProps> = ({ isOpen, onClose 
   }, [isOpen]);
 
   const handleRefresh = () => {
-    setApiStatuses(prev => prev.map(status => ({
-      ...status,
-      status: 'checking' as const,
-      message: 'Checking connection...',
-      icon: <RefreshCw className="h-5 w-5 animate-spin" />,
-      color: 'text-yellow-400',
-    })));
+    setApiStatuses((prev) =>
+      prev.map((status, index) => ({
+        ...status,
+        name: index === 0 ? brokerDisplayName : status.name,
+        status: 'checking' as const,
+        message: 'Checking connection...',
+        icon: <RefreshCw className="h-5 w-5 animate-spin" />,
+        color: 'text-yellow-400',
+      }))
+    );
     checkApiStatus();
   };
 
@@ -223,7 +240,7 @@ export const ApiStatusModal: React.FC<ApiStatusModalProps> = ({ isOpen, onClose 
           <h3 className="text-white font-semibold mb-3">API Information</h3>
           <div className="space-y-2 text-sm text-gray-300">
             <div className="flex justify-between">
-              <span>Alpaca Environment:</span>
+              <span>Broker Environment:</span>
               <span className="text-blue-400">Paper Trading</span>
             </div>
             <div className="flex justify-between">

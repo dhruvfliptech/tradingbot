@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Order } from '../types/trading';
-import { alpacaService } from './alpacaService';
+import { tradingProviderService } from './tradingProviderService';
 
 export interface ComputedMetrics {
   totalReturnPercent: number;
@@ -95,7 +95,7 @@ function buildDailyReturnSeries(closed: ClosedTrade[]): number[] {
 
 export class MetricsService {
   async computeFromOrders(): Promise<ComputedMetrics> {
-    const orders = await alpacaService.getOrders();
+    const orders = await tradingProviderService.getOrders();
     const closed = computeClosedTrades(orders);
 
     const totalBasis = closed.reduce((s, t) => s + t.basisUsd, 0);

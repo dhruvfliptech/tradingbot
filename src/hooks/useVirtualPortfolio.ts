@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { virtualPortfolioService, VirtualPortfolio } from '../services/persistence/virtualPortfolioService';
 import { tradeHistoryService } from '../services/persistence/tradeHistoryService';
 import { statePersistenceService } from '../services/persistence/statePersistenceService';
@@ -139,23 +139,23 @@ export const useVirtualPortfolio = () => {
     }
   };
 
-  const getPerformanceHistory = async (days: number = 30) => {
+  const getPerformanceHistory = useCallback(async (days: number = 30) => {
     try {
       return await virtualPortfolioService.getPortfolioHistory(days);
     } catch (err) {
       console.error('Failed to get performance history:', err);
       return [];
     }
-  };
+  }, []);
 
-  const getDailySnapshots = async (days: number = 30) => {
+  const getDailySnapshots = useCallback(async (days: number = 30) => {
     try {
       return await virtualPortfolioService.getDailySnapshots(days);
     } catch (err) {
       console.error('Failed to get daily snapshots:', err);
       return [];
     }
-  };
+  }, []);
 
   return {
     portfolio,

@@ -26,8 +26,9 @@ import { agentSettingsService, AgentSettings, DEFAULT_SETTINGS } from '../servic
 import { auditLogService } from '../services/persistence/auditLogService';
 import { statePersistenceService } from '../services/persistence/statePersistenceService';
 import { AutoTradeActivity } from '../components/Dashboard/AutoTradeActivity';
+import { useTradingProvider } from '../hooks/useTradingProvider';
 import { DashboardChat } from '../components/Assistant/DashboardChat';
-import { alpacaService } from '../services/alpacaService';
+import { tradingProviderService } from '../services/tradingProviderService';
 import { coinGeckoService } from '../services/coinGeckoService';
 import { Account, Position, Order, CryptoData } from '../types/trading';
 
@@ -73,10 +74,12 @@ export const AgentControlsEnhanced: React.FC = () => {
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [pauseReason, setPauseReason] = useState('');
   const [apiStatuses, setApiStatuses] = useState({
-    alpaca: 'checking' as 'connected' | 'error' | 'checking',
+    broker: 'checking' as 'connected' | 'error' | 'checking',
     coingecko: 'checking' as 'connected' | 'error' | 'checking',
     supabase: 'checking' as 'connected' | 'error' | 'checking',
   });
+
+  const { activeProvider } = useTradingProvider();
 
   useEffect(() => {
     setIsAgentActive(tradingAgentV2.isRunning());
@@ -98,7 +101,7 @@ export const AgentControlsEnhanced: React.FC = () => {
       unsubscribe();
       clearInterval(interval);
     };
-  }, []);
+  }, [activeProvider]);
 
   const loadSettings = async () => {
     try {
@@ -127,11 +130,12 @@ export const AgentControlsEnhanced: React.FC = () => {
   };
   
   const loadTradingData = async () => {
+    setApiStatuses((prev) => ({ ...prev, broker: 'checking' }));
     try {
       const [accountData, positionsData, ordersData, cryptoData] = await Promise.all([
-        alpacaService.getAccount(),
-        alpacaService.getPositions(),
-        alpacaService.getOrders(),
+        tradingProviderService.getAccount(),
+        tradingProviderService.getPositions(),
+        tradingProviderService.getOrders(),
         coinGeckoService.getCryptoData(['bitcoin', 'ethereum', 'binancecoin', 'solana', 'cardano'])
       ]);
       setAccount(accountData);
@@ -139,12 +143,13 @@ export const AgentControlsEnhanced: React.FC = () => {
       setOrders(ordersData);
       setCryptoData(cryptoData);
       setApiStatuses({
-        alpaca: 'connected',
+        broker: 'connected',
         coingecko: 'connected',
         supabase: 'connected',
       });
     } catch (error) {
       console.error('Failed to load trading data:', error);
+      setApiStatuses((prev) => ({ ...prev, broker: 'error' }));
     }
   };
 

@@ -318,7 +318,6 @@ export const DraggableGrid: React.FC<DraggableGridProps> = ({ widgets, onLayoutC
         preventCollision={false}
         allowOverlap={true}
         compactType={null}
-        verticalCompact={false}
         autoSize={true}
         isBounded={true}
         resizeHandles={['se']}

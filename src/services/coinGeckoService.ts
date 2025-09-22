@@ -1,6 +1,7 @@
 import { Account, Order, Position, CryptoData, FearGreedIndex } from '../types/trading';
 import { supabase } from '../lib/supabase';
 import { apiKeysService } from './apiKeysService';
+import { tradingProviderService, PlaceOrderParams } from './tradingProviderService';
 
 class CoinGeckoService {
   private baseUrl: string;
@@ -334,27 +335,32 @@ class CoinGeckoService {
   }
 
   async getAccount(): Promise<Account> {
-    // Delegate to Alpaca service for real account data
-    const { alpacaService } = await import('./alpacaService');
-    return alpacaService.getAccount();
+    return tradingProviderService.getAccount();
   }
 
   async getPositions(): Promise<Position[]> {
-    // Delegate to Alpaca service for real positions data
-    const { alpacaService } = await import('./alpacaService');
-    return alpacaService.getPositions();
+    return tradingProviderService.getPositions();
   }
 
   async getOrders(): Promise<Order[]> {
-    // Delegate to Alpaca service for real orders data
-    const { alpacaService } = await import('./alpacaService');
-    return alpacaService.getOrders();
+    return tradingProviderService.getOrders();
   }
 
   async placeOrder(order: Partial<Order>): Promise<Order> {
-    // Delegate to Alpaca service for real order placement
-    const { alpacaService } = await import('./alpacaService');
-    return alpacaService.placeOrder(order);
+    if (!order.symbol || !order.qty || !order.side) {
+      throw new Error('Invalid order request: missing symbol, qty, or side');
+    }
+
+    const params: PlaceOrderParams = {
+      symbol: order.symbol,
+      qty: order.qty,
+      side: order.side,
+      order_type: (order.order_type as 'market' | 'limit') || 'market',
+      time_in_force: (order as any).time_in_force || 'day',
+      limit_price: order.limit_price ?? undefined,
+    };
+
+    return tradingProviderService.placeOrder(params);
   }
 }
 

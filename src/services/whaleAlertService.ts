@@ -144,7 +144,9 @@ class WhaleAlertService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(`${this.baseUrl}/${endpoint}?${searchParams}`, {
+      // Use proxy for CORS issues
+      const proxyUrl = `/api/whale-alert-proxy?${searchParams}`;
+      const response = await fetch(proxyUrl, {
         signal: controller.signal,
       });
 

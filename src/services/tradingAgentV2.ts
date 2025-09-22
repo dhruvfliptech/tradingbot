@@ -1,6 +1,6 @@
 import { TradingSignal, CryptoData } from '../types/trading';
 import { coinGeckoService } from './coinGeckoService';
-import { alpacaService } from './alpacaService';
+import { tradingProviderService } from './tradingProviderService';
 import { groqService } from './groqService';
 import { tradeHistoryService } from './persistence/tradeHistoryService';
 import { auditLogService } from './persistence/auditLogService';
@@ -144,8 +144,8 @@ class TradingAgentV2 {
       // snapshot account/positions for risk manager
       try {
         const [accountSnap, positionsSnap] = await Promise.all([
-          alpacaService.getAccount(),
-          alpacaService.getPositions(),
+          tradingProviderService.getAccount(),
+          tradingProviderService.getPositions(),
         ]);
         this.lastAccountSnapshot = { account: accountSnap, positions: positionsSnap };
       } catch {}
@@ -325,13 +325,13 @@ class TradingAgentV2 {
         );
       }
 
-      // Execute via Alpaca (or demo mode)
-      const order = await alpacaService.placeOrder({
+      // Execute via configured trading broker
+      const order = await tradingProviderService.placeOrder({
         symbol: signal.symbol.toUpperCase(),
         qty: quantity,
         side: 'buy',
-        type: 'market',
-        time_in_force: 'day'
+        order_type: 'market',
+        time_in_force: 'day',
       });
 
       // Update trade record with order details

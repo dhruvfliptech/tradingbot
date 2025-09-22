@@ -64,7 +64,7 @@ An advanced cryptocurrency trading bot with institutional-grade analytics, compr
 - **State Management**: React Context + Hooks
 - **Database**: Supabase (PostgreSQL)
 - **AI**: Groq LLM API
-- **Market Data**: Alpaca Markets API
+- **Market Data**: Alpaca Markets API (paper) and Binance spot feeds for live trading
 - **Crypto Prices**: CoinGecko API
 - **Dashboard**: React Grid Layout (draggable widgets)
 
@@ -97,7 +97,7 @@ src/
 ### Prerequisites
 - Node.js 18+ and npm
 - Supabase account
-- API keys for Alpaca, Groq, and CoinGecko
+- API keys for Alpaca, Binance, Groq, and CoinGecko
 
 ### Installation
 
@@ -123,6 +123,8 @@ VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_ALPACA_API_KEY=your_alpaca_key
 VITE_ALPACA_SECRET_KEY=your_alpaca_secret
+VITE_BINANCE_API_KEY=your_binance_api_key
+VITE_BINANCE_SECRET_KEY=your_binance_secret
 VITE_GROQ_API_KEY=your_groq_key
 VITE_COINGECKO_API_KEY=your_coingecko_key
 ```
@@ -151,6 +153,8 @@ npm run dev
 
 ## Trading Configuration
 
+- Switch between Alpaca paper trading and Binance live trading under **Settings → Trading** on the dashboard.
+
 ### Risk Settings
 - Per-trade risk: 0.5% - 5% of portfolio
 - Maximum position size: 5% - 20% of portfolio
@@ -170,7 +174,7 @@ npm run dev
 The trading agent communicates with various services:
 
 - **Supabase**: Authentication, data persistence, audit logs
-- **Alpaca**: Trade execution, account data
+- **Trading Brokers**: Alpaca paper trading or Binance live crypto trading
 - **CoinGecko**: Cryptocurrency prices, market data
 - **Groq**: AI market analysis
 - **Binance** (optional): Funding rates for sentiment
