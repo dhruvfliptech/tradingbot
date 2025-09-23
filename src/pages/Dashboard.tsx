@@ -48,6 +48,7 @@ export const Dashboard: React.FC = () => {
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
+  const [btcUsdPrice, setBtcUsdPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showApiStatus, setShowApiStatus] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -178,6 +179,8 @@ export const Dashboard: React.FC = () => {
       // Fetch crypto data first
       const cryptoData = await coinGeckoService.getCryptoData(['bitcoin', 'ethereum', 'binancecoin', 'solana', 'cardano']);
       setCryptoData(cryptoData);
+      const btc = cryptoData.find(c => c.id === 'bitcoin');
+      if (btc) setBtcUsdPrice(btc.price);
 
       // Then fetch other data
       const [accountData, positionsData, ordersData] = await Promise.all([
@@ -307,7 +310,7 @@ export const Dashboard: React.FC = () => {
       title: 'Account Summary',
       component: (
         <WidgetErrorBoundary widgetName="Account Summary">
-          <AccountSummary account={account} />
+          <AccountSummary account={account} btcUsd={btcUsdPrice ?? undefined} />
         </WidgetErrorBoundary>
       ),
     },

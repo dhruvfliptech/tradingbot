@@ -1,14 +1,13 @@
 import React from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Activity, Bitcoin, Bot } from 'lucide-react';
+import { DollarSign, Activity, Bitcoin } from 'lucide-react';
 import { Account } from '../../types/trading';
-import { getTradingBotReport } from '../../services/tradingBotReportService';
 
 interface AccountSummaryProps {
   account: Account | null;
+  btcUsd?: number; // optional BTC/USD price for value estimate
 }
 
-export const AccountSummary: React.FC<AccountSummaryProps> = ({ account }) => {
-  const botReport = getTradingBotReport();
+export const AccountSummary: React.FC<AccountSummaryProps> = ({ account, btcUsd }) => {
   
   if (!account) {
     return (
@@ -25,11 +24,11 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({ account }) => {
     );
   }
 
-  // Use realistic portfolio values that reflect bot trading performance
-  const botPnL = botReport.totalPnL;
-  const adjustedPortfolioValue = account.portfolio_value + botPnL;
-  const totalReturn = adjustedPortfolioValue - account.portfolio_value;
-  const totalReturnPercent = (totalReturn / account.portfolio_value) * 100;
+  // Show broker truth only (no demo overlays)
+  const adjustedPortfolioValue = account.portfolio_value;
+  const usdCash = account.available_balance;
+  const btcQty = account.balance_btc;
+  const btcUsdValue = btcUsd ? (btcQty * btcUsd) : null;
 
   const cards = [
     {
@@ -50,12 +49,6 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({ account }) => {
       icon: Bitcoin,
       color: 'text-yellow-400',
     },
-    {
-      title: 'Bot P&L (3 days)',
-      value: `${botPnL >= 0 ? '+' : ''}$${botPnL.toLocaleString()}`,
-      icon: Bot,
-      color: botPnL >= 0 ? 'text-green-400' : 'text-red-400',
-    },
   ];
 
   return (
@@ -73,6 +66,20 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({ account }) => {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Simple breakdown under the cards */}
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="bg-gray-700 rounded-lg p-3">
+          <div className="text-gray-400">USD Cash</div>
+          <div className="text-white font-semibold">${usdCash.toLocaleString()}</div>
+        </div>
+        <div className="bg-gray-700 rounded-lg p-3">
+          <div className="text-gray-400">BTC Holdings</div>
+          <div className="text-white font-semibold">
+            {btcQty.toFixed(6)} BTC{btcUsdValue !== null ? ` (≈ $${btcUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })})` : ''}
+          </div>
+        </div>
       </div>
     </div>
   );

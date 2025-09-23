@@ -26,14 +26,15 @@ class BrokerManager {
       ? 'binance'
       : 'alpaca';
 
-    let initialBroker: TradingBrokerId = MODE_TO_BROKER.demo;
+    // Always default to Live (Binance) on first load unless explicitly overridden this session
+    let initialBroker: TradingBrokerId = 'binance';
 
     if (persistedMode && MODE_TO_BROKER[persistedMode]) {
       initialBroker = MODE_TO_BROKER[persistedMode];
     } else if (persistedBroker && BROKER_TO_MODE[persistedBroker]) {
       initialBroker = persistedBroker;
-    } else if (envDefault === 'binance') {
-      initialBroker = 'binance';
+    } else if (envDefault === 'alpaca') {
+      initialBroker = 'alpaca';
     }
 
     try {
