@@ -303,6 +303,15 @@ export const Dashboard: React.FC = () => {
   // Dashboard widgets configuration - Enhanced with new strategy widgets
   const dashboardWidgets = [
     {
+      id: 'account-summary',
+      title: 'Account Summary',
+      component: (
+        <WidgetErrorBoundary widgetName="Account Summary">
+          <AccountSummary account={account} />
+        </WidgetErrorBoundary>
+      ),
+    },
+    {
       id: 'portfolio-value',
       title: 'Portfolio Value Chart ($50K Baseline)',
       component: (

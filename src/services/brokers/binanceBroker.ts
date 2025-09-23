@@ -24,8 +24,8 @@ class BinanceBroker implements TradingBroker {
 
   readonly metadata = {
     id: this.id,
-    label: 'Binance Spot',
-    description: 'Live crypto spot trading via Binance exchange',
+    label: 'Binance US',
+    description: 'Live crypto spot trading via Binance US exchange',
     features: {
       paperTrading: false,
       liveTrading: true,
@@ -33,8 +33,8 @@ class BinanceBroker implements TradingBroker {
       supportsCrypto: true,
       supportsEquities: false,
     },
-    baseCurrency: 'USDT',
-    docsUrl: 'https://binance-docs.github.io/apidocs/spot/en/',
+    baseCurrency: 'USD',
+    docsUrl: 'https://docs.binance.us/#public-rest-api',
   } as const;
 
   private apiKey: string;
@@ -42,18 +42,20 @@ class BinanceBroker implements TradingBroker {
   private baseUrl: string;
   private recvWindow = Number(import.meta.env.VITE_BINANCE_RECV_WINDOW || 5000);
   private useProxy: boolean;
+  private serverTimeOffsetMs: number = 0; // serverTime - Date.now()
 
   constructor() {
     this.apiKey = import.meta.env.VITE_BINANCE_API_KEY || '';
     this.secretKey = import.meta.env.VITE_BINANCE_SECRET_KEY || '';
-    this.baseUrl = (import.meta.env.VITE_BINANCE_BASE_URL || 'https://api.binance.com').replace(/\/$/, '');
+    // Force Binance US by default; allow explicit override via VITE_BINANCE_BASE_URL if needed
+    this.baseUrl = (import.meta.env.VITE_BINANCE_BASE_URL || 'https://api.binance.us').replace(/\/$/, '');
     
-    // Use proxy in development or when running in browser
-    // Check if we're running with Netlify Dev (localhost:8888) or regular dev server
-    this.useProxy = import.meta.env.DEV || (typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+    // Opt-in proxy usage via env flag only (default false)
+    this.useProxy = (import.meta.env.VITE_BINANCE_USE_PROXY || '').toString() === 'true';
 
     void this.initializeApiKeys();
+    // Prime time offset in background (best-effort)
+    void this.syncServerTime().catch(() => {});
   }
 
   private async initializeApiKeys(): Promise<void> {
@@ -76,12 +78,25 @@ class BinanceBroker implements TradingBroker {
     }
   }
 
+  private async syncServerTime(): Promise<void> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v3/time`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data.serverTime === 'number') {
+        this.serverTimeOffsetMs = data.serverTime - Date.now();
+      }
+    } catch {
+      // noop
+    }
+  }
+
   private normalizeSymbolInternal(symbol: string): string {
     if (!symbol) return symbol;
-    let normalized = symbol.trim().toUpperCase();
-    if (normalized.endsWith('USD')) normalized = normalized.replace(/USD$/, 'USDT');
-    if (!normalized.endsWith('USDT') && normalized.length <= 6) normalized = `${normalized}USDT`;
-    return normalized;
+    const normalized = symbol.trim().toUpperCase();
+    if (normalized.endsWith('USD') || normalized.endsWith('USDT')) return normalized;
+    // Default to USD on Binance US
+    return `${normalized}USD`;
   }
 
   normalizeSymbol(symbol: string): string {
@@ -90,14 +105,12 @@ class BinanceBroker implements TradingBroker {
 
   toBrokerSymbol(symbol: string): string {
     const base = symbol.trim().toUpperCase();
-    if (base.endsWith('USDT')) return base;
-    if (base.endsWith('USD')) return base.replace(/USD$/, 'USDT');
-    return `${base}USDT`;
+    if (base.endsWith('USD') || base.endsWith('USDT')) return base;
+    return `${base}USD`;
   }
 
   fromBrokerSymbol(symbol: string): string {
     if (!symbol) return symbol;
-    if (symbol.endsWith('USDT')) return symbol.replace(/USDT$/, 'USD');
     return symbol;
   }
 
@@ -115,6 +128,7 @@ class BinanceBroker implements TradingBroker {
     params?: Record<string, string | number | undefined | null>;
     signed?: boolean;
     timeoutMs?: number;
+    retryOnTimeSkew?: boolean;
   } = {}): Promise<T> {
     const method = options.method || 'GET';
     
@@ -228,7 +242,9 @@ class BinanceBroker implements TradingBroker {
         throw new Error('Binance API keys are not configured');
       }
 
-      params.set('timestamp', Date.now().toString());
+      // Use server time with offset to avoid -1021 errors
+      const now = Date.now() + this.serverTimeOffsetMs;
+      params.set('timestamp', Math.floor(now).toString());
       if (!params.has('recvWindow')) {
         params.set('recvWindow', this.recvWindow.toString());
       }
@@ -268,9 +284,29 @@ class BinanceBroker implements TradingBroker {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Binance API error ${response.status}: ${errorText}`);
-        throw new Error(`Binance API error ${response.status}: ${errorText}`);
+        // Try to parse structured error
+        let errorBody: any = null;
+        try {
+          errorBody = await response.json();
+        } catch {
+          // fallback to text
+          errorBody = { message: await response.text() };
+        }
+
+        // Handle time skew error (-1021)
+        if (errorBody && (errorBody.code === -1021 || String(errorBody.message).includes('timestamp'))) {
+          if (options.signed && options.retryOnTimeSkew !== false) {
+            await this.syncServerTime();
+            // Retry once with updated offset
+            return await this.request<T>(path, { ...options, retryOnTimeSkew: false });
+          }
+        }
+
+        const code = errorBody?.code || response.status;
+        const msg = errorBody?.msg || errorBody?.message || 'Unknown error';
+        const composed = `Binance API error ${code}: ${msg}`;
+        console.error(composed);
+        throw new Error(composed);
       }
 
       if (response.status === 204) {
@@ -303,6 +339,7 @@ class BinanceBroker implements TradingBroker {
 
       let portfolioValue = 0;
       let availableBalance = 0;
+      let usdCashFree = 0;
       let btcBalance = 0;
 
       for (const bal of filtered) {
@@ -315,6 +352,9 @@ class BinanceBroker implements TradingBroker {
         if (bal.asset === 'BTC') {
           btcBalance = totalQty;
         }
+        if (bal.asset === 'USD') {
+          usdCashFree = freeQty; // true USD cash on Binance US
+        }
       }
 
       return {
@@ -322,7 +362,8 @@ class BinanceBroker implements TradingBroker {
         balance_usd: portfolioValue,
         balance_btc: btcBalance,
         portfolio_value: portfolioValue,
-        available_balance: availableBalance,
+        // Show pure USD cash for available balance to match requested semantics
+        available_balance: usdCashFree || availableBalance,
         total_trades: accountData.totalTradeCount || 0,
       };
     } catch (error) {
@@ -352,7 +393,7 @@ class BinanceBroker implements TradingBroker {
         const marketValue = totalQty * price;
 
         return {
-          symbol: this.fromBrokerSymbol(`${asset}USDT`),
+          symbol: this.fromBrokerSymbol(`${asset}USD`),
           qty: totalQty.toString(),
           market_value: marketValue,
           cost_basis: marketValue, // Binance spot does not expose per-position cost basis
@@ -370,7 +411,7 @@ class BinanceBroker implements TradingBroker {
   }
 
   async getOrders(): Promise<Order[]> {
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT'];
+    const symbols = ['BTCUSD', 'ETHUSD', 'BNBUSD', 'SOLUSD', 'ADAUSD'];
     const orders: Order[] = [];
 
     for (const symbol of symbols) {
@@ -452,7 +493,7 @@ class BinanceBroker implements TradingBroker {
     }
 
     try {
-      const symbols = uniqueAssets.map((asset) => `${asset}USDT`);
+      const symbols = uniqueAssets.map((asset) => `${asset}USD`);
       const response = await this.request<any[]>('/api/v3/ticker/price', {
         params: { symbols: JSON.stringify(symbols) },
       });
