@@ -1,0 +1,387 @@
+# Ingress Configuration for Trading Bot
+# =====================================
+# Load balancing, SSL termination, and routing
+
+# NGINX Ingress Controller (if using)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trading-bot-ingress
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: ingress
+  annotations:
+    # NGINX Ingress Controller
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET,POST,PUT,DELETE,OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+    
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: https:;" always;
+    
+    # Compression
+    nginx.ingress.kubernetes.io/server-snippet: |
+      gzip on;
+      gzip_vary on;
+      gzip_min_length 1024;
+      gzip_types text/plain text/css text/xml text/javascript application/javascript application/json;
+    
+    # Client body size
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    
+    # External DNS (if using)
+    external-dns.alpha.kubernetes.io/hostname: "api.tradingbot.com"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    
+    # Cert Manager (if using)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/acme-challenge-type: "http01"
+
+spec:
+  tls:
+  - hosts:
+    - api.tradingbot.com
+    - staging-api.tradingbot.com
+    secretName: trading-bot-tls
+  
+  rules:
+  # Production API
+  - host: api.tradingbot.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-service
+            port:
+              number: 80
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 3000
+      - path: /ml
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-service
+            port:
+              number: 5000
+      - path: /rl
+        pathType: Prefix
+        backend:
+          service:
+            name: rl-service
+            port:
+              number: 8001
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 3000
+      - path: /metrics
+        pathType: Exact
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 3001
+  
+  # Staging API (if in same cluster)
+  - host: staging-api.tradingbot.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-service
+            port:
+              number: 80
+
+---
+# Internal Ingress for monitoring services
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trading-bot-monitoring-ingress
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: monitoring
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    
+    # Basic auth for monitoring endpoints
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: monitoring-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Trading Bot Monitoring"
+    
+    # IP whitelist for monitoring access
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+spec:
+  tls:
+  - hosts:
+    - monitoring.tradingbot.com
+    secretName: trading-bot-monitoring-tls
+  
+  rules:
+  - host: monitoring.tradingbot.com
+    http:
+      paths:
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-service
+            port:
+              number: 9090
+      - path: /alerts
+        pathType: Prefix
+        backend:
+          service:
+            name: alertmanager-service
+            port:
+              number: 9093
+
+---
+# AWS Load Balancer Controller Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trading-bot-alb-ingress
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: alb
+  annotations:
+    # AWS Load Balancer Controller
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/load-balancer-name: trading-bot-alb
+    
+    # SSL
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:123456789012:certificate/your-cert-id"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    
+    # Health checks
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "10"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    
+    # Stickiness
+    alb.ingress.kubernetes.io/target-group-attributes: |
+      stickiness.enabled=true,
+      stickiness.lb_cookie.duration_seconds=86400,
+      load_balancing.algorithm.type=least_outstanding_requests
+    
+    # Security groups
+    alb.ingress.kubernetes.io/security-groups: "sg-12345678,sg-87654321"
+    alb.ingress.kubernetes.io/subnets: "subnet-12345678,subnet-87654321"
+    
+    # Tags
+    alb.ingress.kubernetes.io/tags: |
+      Environment=production,
+      Application=trading-bot,
+      Team=engineering
+
+spec:
+  rules:
+  - host: api.tradingbot.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-service
+            port:
+              number: 80
+
+---
+# GCP Load Balancer Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trading-bot-gce-ingress
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: gce-lb
+  annotations:
+    # GKE Ingress
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "trading-bot-ip"
+    
+    # SSL
+    ingress.gcp.io/pre-shared-cert: "trading-bot-ssl-cert"
+    
+    # Backend services
+    cloud.google.com/backend-config: '{"default": "trading-bot-backend-config"}'
+    
+    # CDN
+    ingress.gcp.io/static-ip: "trading-bot-static-ip"
+
+spec:
+  rules:
+  - host: api.tradingbot.com
+    http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: nginx-service
+            port:
+              number: 80
+
+---
+# Backend Configuration for GCP
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: trading-bot-backend-config
+  namespace: trading-bot
+spec:
+  # Health check
+  healthCheck:
+    checkIntervalSec: 30
+    timeoutSec: 10
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 3000
+  
+  # Session affinity
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+    affinityCookieTtlSec: 86400
+  
+  # Connection draining
+  connectionDraining:
+    drainingTimeoutSec: 60
+  
+  # Security policy
+  securityPolicy:
+    name: "trading-bot-security-policy"
+  
+  # CDN
+  cdn:
+    enabled: true
+    cachePolicy:
+      includeHost: true
+      includeProtocol: true
+      includeQueryString: false
+
+---
+# Certificate for cert-manager
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: trading-bot-cert
+  namespace: trading-bot
+spec:
+  secretName: trading-bot-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - api.tradingbot.com
+  - staging-api.tradingbot.com
+  - monitoring.tradingbot.com
+
+---
+# ClusterIssuer for Let's Encrypt
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@tradingbot.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+    - dns01:
+        route53:
+          region: us-east-1
+          accessKeyID: AKIAIOSFODNN7EXAMPLE
+          secretAccessKeySecretRef:
+            name: route53-credentials
+            key: secret-access-key
+
+---
+# Basic Auth Secret for monitoring
+apiVersion: v1
+kind: Secret
+metadata:
+  name: monitoring-basic-auth
+  namespace: trading-bot
+type: Opaque
+data:
+  # Generated with: htpasswd -nb admin your-password | base64
+  auth: YWRtaW46JGFwcjEkSDZ1YjJnJC5TdVpQUDJPWnBSVGZyTWVOLjVIMC8=
+
+---
+# External DNS annotation for automatic DNS management
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-dns-service
+  namespace: trading-bot
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: api.tradingbot.com
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app.kubernetes.io/component: nginx

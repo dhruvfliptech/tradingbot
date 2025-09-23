@@ -1,0 +1,35 @@
+# Performance Optimization Requirements
+# =====================================
+
+# Core async libraries
+uvloop>=0.17.0
+aiohttp>=3.8.0
+websockets>=11.0
+
+# Redis for caching
+redis>=4.5.0
+hiredis>=2.2.0  # C parser for Redis (faster)
+
+# NumPy optimizations
+numpy>=1.24.0
+numba>=0.57.0  # JIT compilation
+scipy>=1.10.0
+
+# Technical analysis
+TA-Lib>=0.4.26
+
+# Serialization
+msgpack>=1.0.5
+msgpack-numpy>=0.4.8
+lz4>=4.3.0  # Fast compression
+
+# System monitoring
+psutil>=5.9.0
+
+# SSL/TLS
+certifi>=2023.0.0
+
+# Development
+pytest>=7.3.0
+pytest-asyncio>=0.21.0
+pytest-benchmark>=4.0.0

@@ -1,0 +1,565 @@
+# Prometheus Alert Rules for Trading Bot
+# Comprehensive alerting for trading performance, system health, and risk management
+
+groups:
+  # Trading Performance Alerts
+  - name: trading_performance
+    rules:
+      - alert: HighDrawdown
+        expr: trading_max_drawdown > 15
+        for: 5m
+        labels:
+          severity: warning
+          component: trading
+          category: performance
+        annotations:
+          summary: "High portfolio drawdown detected"
+          description: "Portfolio drawdown is {{ $value }}%, exceeding the 15% warning threshold"
+          action: "Review strategy performance and consider position sizing adjustments"
+
+      - alert: CriticalDrawdown
+        expr: trading_max_drawdown > 25
+        for: 2m
+        labels:
+          severity: critical
+          component: trading
+          category: performance
+        annotations:
+          summary: "CRITICAL: Excessive portfolio drawdown"
+          description: "Portfolio drawdown is {{ $value }}%, exceeding the 25% critical threshold"
+          action: "IMMEDIATE ACTION REQUIRED: Consider halting trading or reducing positions"
+
+      - alert: LowSharpeRatio
+        expr: trading_sharpe_ratio < 0.5
+        for: 15m
+        labels:
+          severity: warning
+          component: trading
+          category: performance
+        annotations:
+          summary: "Low Sharpe ratio detected"
+          description: "Sharpe ratio is {{ $value }}, indicating poor risk-adjusted returns"
+          action: "Review strategy parameters and risk management settings"
+
+      - alert: NegativeSharpeRatio
+        expr: trading_sharpe_ratio < 0
+        for: 10m
+        labels:
+          severity: critical
+          component: trading
+          category: performance
+        annotations:
+          summary: "CRITICAL: Negative Sharpe ratio"
+          description: "Sharpe ratio is {{ $value }}, indicating negative risk-adjusted returns"
+          action: "IMMEDIATE REVIEW: Strategy may be consistently losing money"
+
+      - alert: LowWinRate
+        expr: trading_win_rate < 40
+        for: 30m
+        labels:
+          severity: warning
+          component: trading
+          category: performance
+        annotations:
+          summary: "Low win rate detected"
+          description: "Win rate is {{ $value }}%, below optimal threshold"
+          action: "Analyze losing trades and consider strategy adjustments"
+
+      - alert: PortfolioValueDrop
+        expr: rate(trading_portfolio_value_usd[1h]) < -0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: trading
+          category: performance
+        annotations:
+          summary: "Rapid portfolio value decline"
+          description: "Portfolio value dropping at {{ $value | humanizePercentage }} per hour"
+          action: "Monitor closely and consider defensive measures"
+
+      - alert: ExcessiveUnrealizedLoss
+        expr: trading_unrealized_pnl_usd < -10000
+        for: 10m
+        labels:
+          severity: critical
+          component: trading
+          category: performance
+        annotations:
+          summary: "High unrealized losses"
+          description: "Unrealized P&L is {{ $value | humanize }}, indicating significant paper losses"
+          action: "Review open positions and consider stop-loss execution"
+
+  # Risk Management Alerts
+  - name: risk_management
+    rules:
+      - alert: HighVaR95
+        expr: risk_var_95_percent > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: risk
+          category: risk_management
+        annotations:
+          summary: "High Value at Risk (95%)"
+          description: "VaR 95% is {{ $value }}%, exceeding comfortable risk levels"
+          action: "Consider reducing position sizes or diversifying holdings"
+
+      - alert: CriticalVaR95
+        expr: risk_var_95_percent > 10
+        for: 2m
+        labels:
+          severity: critical
+          component: risk
+          category: risk_management
+        annotations:
+          summary: "CRITICAL: Excessive Value at Risk"
+          description: "VaR 95% is {{ $value }}%, indicating dangerous risk exposure"
+          action: "IMMEDIATE ACTION: Reduce positions or hedge portfolio"
+
+      - alert: HighPositionConcentration
+        expr: risk_position_concentration > 0.4
+        for: 10m
+        labels:
+          severity: warning
+          component: risk
+          category: risk_management
+        annotations:
+          summary: "High position concentration"
+          description: "Position concentration is {{ $value | humanizePercentage }}, indicating lack of diversification"
+          action: "Diversify portfolio to reduce concentration risk"
+
+      - alert: ExcessiveLeverage
+        expr: risk_leverage_ratio > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: risk
+          category: risk_management
+        annotations:
+          summary: "High leverage detected"
+          description: "Leverage ratio is {{ $value }}x, potentially amplifying losses"
+          action: "Consider reducing leverage to improve risk profile"
+
+      - alert: CriticalLeverage
+        expr: risk_leverage_ratio > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: risk
+          category: risk_management
+        annotations:
+          summary: "CRITICAL: Excessive leverage"
+          description: "Leverage ratio is {{ $value }}x, creating dangerous amplification of risks"
+          action: "IMMEDIATE ACTION: Reduce leverage immediately"
+
+      - alert: HighCorrelationRisk
+        expr: risk_correlation_score > 0.8
+        for: 15m
+        labels:
+          severity: warning
+          component: risk
+          category: risk_management
+        annotations:
+          summary: "High correlation risk"
+          description: "Portfolio correlation score is {{ $value }}, indicating concentrated exposure to similar assets"
+          action: "Diversify into uncorrelated assets"
+
+      - alert: RiskLimitBreach
+        expr: increase(risk_breaches_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: risk
+          category: risk_management
+        annotations:
+          summary: "Risk limit breach detected"
+          description: "{{ $value }} risk limit breach(es) in the last 5 minutes"
+          action: "Review risk controls and take corrective action"
+
+  # System Health Alerts
+  - name: system_health
+    rules:
+      - alert: HighCPUUsage
+        expr: system_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+          category: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%, which may impact trading performance"
+          action: "Monitor system performance and consider resource optimization"
+
+      - alert: CriticalCPUUsage
+        expr: system_cpu_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+          category: resources
+        annotations:
+          summary: "CRITICAL: CPU overload"
+          description: "CPU usage is {{ $value }}%, system may become unresponsive"
+          action: "IMMEDIATE ACTION: Investigate high CPU processes"
+
+      - alert: HighMemoryUsage
+        expr: system_memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+          category: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}%, approaching system limits"
+          action: "Monitor memory consumption and consider optimization"
+
+      - alert: CriticalMemoryUsage
+        expr: system_memory_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+          category: resources
+        annotations:
+          summary: "CRITICAL: Memory exhaustion"
+          description: "Memory usage is {{ $value }}%, system may crash"
+          action: "IMMEDIATE ACTION: Free memory or restart services"
+
+      - alert: HighDiskUsage
+        expr: system_disk_usage_percent > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+          category: resources
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}%, approaching capacity limits"
+          action: "Clean up disk space or expand storage"
+
+      - alert: CriticalDiskUsage
+        expr: system_disk_usage_percent > 95
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+          category: resources
+        annotations:
+          summary: "CRITICAL: Disk space exhaustion"
+          description: "Disk usage is {{ $value }}%, system may fail"
+          action: "IMMEDIATE ACTION: Free disk space immediately"
+
+      - alert: HighNetworkLatency
+        expr: system_network_latency_ms > 500
+        for: 3m
+        labels:
+          severity: warning
+          component: system
+          category: network
+        annotations:
+          summary: "High network latency"
+          description: "Network latency is {{ $value }}ms, may affect trading execution"
+          action: "Check network connectivity and API performance"
+
+      - alert: SystemHealthDegraded
+        expr: system_health_status < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+          category: health
+        annotations:
+          summary: "System health degraded"
+          description: "Overall system health status indicates problems"
+          action: "Run comprehensive system diagnostics"
+
+  # API and Service Alerts
+  - name: api_services
+    rules:
+      - alert: HighAPIErrorRate
+        expr: rate(errors_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          component: api
+          category: errors
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value }} errors/second"
+          action: "Investigate API issues and error patterns"
+
+      - alert: CriticalAPIErrorRate
+        expr: rate(errors_total[5m]) > 0.5
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+          category: errors
+        annotations:
+          summary: "CRITICAL: API failure rate"
+          description: "API error rate is {{ $value }} errors/second, indicating severe issues"
+          action: "IMMEDIATE ACTION: Check API connectivity and failover systems"
+
+      - alert: SlowAPIResponse
+        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          category: performance
+        annotations:
+          summary: "Slow API responses"
+          description: "95th percentile API response time is {{ $value }}s"
+          action: "Optimize API performance or check external service status"
+
+      - alert: ServiceDown
+        expr: service_health_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: service
+          category: availability
+        annotations:
+          summary: "Service is down"
+          description: "{{ $labels.service }} service is not responding"
+          action: "IMMEDIATE ACTION: Restart service and investigate failure"
+
+      - alert: ServiceUpTimelow
+        expr: service_uptime_seconds < 300
+        for: 1m
+        labels:
+          severity: warning
+          component: service
+          category: availability
+        annotations:
+          summary: "Recent service restart"
+          description: "{{ $labels.service }} has been up for only {{ $value }}s"
+          action: "Monitor for stability and investigate recent restarts"
+
+  # Trading Execution Alerts
+  - name: trading_execution
+    rules:
+      - alert: SlowTradeExecution
+        expr: histogram_quantile(0.95, rate(trading_execution_duration_seconds_bucket[5m])) > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: trading
+          category: execution
+        annotations:
+          summary: "Slow trade execution"
+          description: "95th percentile trade execution time is {{ $value }}s"
+          action: "Investigate execution delays and optimize order routing"
+
+      - alert: TradeExecutionFailure
+        expr: increase(errors_total{error_type="trade_execution"}[5m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+          component: trading
+          category: execution
+        annotations:
+          summary: "Trade execution failures"
+          description: "{{ $value }} trade execution failures in last 5 minutes"
+          action: "IMMEDIATE ACTION: Check trading infrastructure and connectivity"
+
+      - alert: ExcessiveOpenPositions
+        expr: trading_open_positions > 20
+        for: 10m
+        labels:
+          severity: warning
+          component: trading
+          category: positions
+        annotations:
+          summary: "High number of open positions"
+          description: "{{ $value }} open positions may indicate over-trading"
+          action: "Review position management strategy"
+
+      - alert: NoTradingActivity
+        expr: increase(trading_trades_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: warning
+          component: trading
+          category: activity
+        annotations:
+          summary: "No trading activity"
+          description: "No trades executed in the last 2 hours"
+          action: "Check if trading is intentionally paused or investigate strategy issues"
+
+  # Data Quality Alerts
+  - name: data_quality
+    rules:
+      - alert: StaleData
+        expr: data_freshness_seconds > 300
+        for: 2m
+        labels:
+          severity: warning
+          component: data
+          category: freshness
+        annotations:
+          summary: "Stale data detected"
+          description: "{{ $labels.data_source }} data is {{ $value }}s old"
+          action: "Check data feed connectivity and processing pipeline"
+
+      - alert: CriticalDataStaleness
+        expr: data_freshness_seconds > 600
+        for: 1m
+        labels:
+          severity: critical
+          component: data
+          category: freshness
+        annotations:
+          summary: "CRITICAL: Data severely stale"
+          description: "{{ $labels.data_source }} data is {{ $value }}s old"
+          action: "IMMEDIATE ACTION: Restore data feed or switch to backup source"
+
+      - alert: PoorDataQuality
+        expr: data_quality_score < 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: data
+          category: quality
+        annotations:
+          summary: "Poor data quality"
+          description: "{{ $labels.data_source }} quality score is {{ $value }}"
+          action: "Investigate data quality issues and validate sources"
+
+      - alert: CriticalDataQuality
+        expr: data_quality_score < 0.7
+        for: 2m
+        labels:
+          severity: critical
+          component: data
+          category: quality
+        annotations:
+          summary: "CRITICAL: Data quality failure"
+          description: "{{ $labels.data_source }} quality score is {{ $value }}"
+          action: "IMMEDIATE ACTION: Switch to backup data source"
+
+  # ML Model and Agent Alerts
+  - name: ml_agents
+    rules:
+      - alert: LowModelAccuracy
+        expr: agent_prediction_accuracy < 0.6
+        for: 15m
+        labels:
+          severity: warning
+          component: ml
+          category: performance
+        annotations:
+          summary: "Low model prediction accuracy"
+          description: "{{ $labels.agent_type }} accuracy is {{ $value }}"
+          action: "Retrain model or review feature engineering"
+
+      - alert: CriticalModelAccuracy
+        expr: agent_prediction_accuracy < 0.5
+        for: 5m
+        labels:
+          severity: critical
+          component: ml
+          category: performance
+        annotations:
+          summary: "CRITICAL: Model accuracy below random"
+          description: "{{ $labels.agent_type }} accuracy is {{ $value }}, worse than random"
+          action: "IMMEDIATE ACTION: Disable model and investigate"
+
+      - alert: SlowModelInference
+        expr: histogram_quantile(0.95, rate(model_inference_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: ml
+          category: performance
+        annotations:
+          summary: "Slow model inference"
+          description: "95th percentile inference time is {{ $value }}s"
+          action: "Optimize model or increase compute resources"
+
+      - alert: LowEnsembleConsensus
+        expr: ensemble_consensus_score < 0.6
+        for: 10m
+        labels:
+          severity: warning
+          component: ml
+          category: consensus
+        annotations:
+          summary: "Low ensemble consensus"
+          description: "Ensemble consensus score is {{ $value }}"
+          action: "Review agent performance and ensemble weights"
+
+      - alert: NegativeAgentReward
+        expr: agent_cumulative_reward < -1000
+        for: 15m
+        labels:
+          severity: warning
+          component: ml
+          category: reward
+        annotations:
+          summary: "Agent showing negative cumulative reward"
+          description: "{{ $labels.agent_type }} cumulative reward is {{ $value }}"
+          action: "Review agent training and reward function"
+
+  # Background Tasks and Operations
+  - name: operations
+    rules:
+      - alert: HighBackgroundTaskQueue
+        expr: background_tasks_active > 50
+        for: 10m
+        labels:
+          severity: warning
+          component: operations
+          category: tasks
+        annotations:
+          summary: "High background task queue"
+          description: "{{ $value }} background tasks are active"
+          action: "Monitor task processing and consider scaling workers"
+
+      - alert: BackgroundTaskFailures
+        expr: rate(background_tasks_completed_total{status="failed"}[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: operations
+          category: tasks
+        annotations:
+          summary: "Background task failures"
+          description: "{{ $value }} task failures per second"
+          action: "Investigate task failure patterns and error logs"
+
+      - alert: ComponentHealthFailure
+        expr: component_health == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: monitoring
+          category: health
+        annotations:
+          summary: "Component health check failed"
+          description: "{{ $labels.component }} health check is failing"
+          action: "IMMEDIATE ACTION: Investigate component status"
+
+# Alert routing and notification configuration
+# (This section would be used with Alertmanager)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Global alert configuration
+global:
+  # How frequently to evaluate rules
+  evaluation_interval: 15s
+  
+  # How long to wait before sending a notification again
+  repeat_interval: 4h
+  
+  # Default group wait time
+  group_wait: 30s
+  
+  # Default group interval
+  group_interval: 5m

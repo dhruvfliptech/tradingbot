@@ -1,0 +1,370 @@
+# ConfigMaps for Trading Bot
+# ==========================
+# Configuration data for all services
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trading-bot-config
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: config
+data:
+  # Backend Configuration
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  METRICS_PORT: "3001"
+  
+  # Service URLs
+  ML_SERVICE_URL: "http://ml-service:5000"
+  RL_SERVICE_URL: "http://rl-service:8001"
+  REDIS_URL: "redis://redis-service:6379"
+  PROMETHEUS_ENDPOINT: "http://prometheus-service:9090"
+  
+  # Feature Flags
+  ENABLE_METRICS: "true"
+  ENABLE_TRACING: "true"
+  ENABLE_HEALTH_CHECKS: "true"
+  
+  # Cache Configuration
+  CACHE_TTL: "300"
+  CACHE_MAX_SIZE: "1000"
+  
+  # Rate Limiting
+  RATE_LIMIT_WINDOW: "60"
+  RATE_LIMIT_MAX_REQUESTS: "1000"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-service-config
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: ml-service
+data:
+  FLASK_ENV: "production"
+  FLASK_DEBUG: "0"
+  WORKER_PROCESSES: "4"
+  MODEL_CACHE_SIZE: "1000"
+  METRICS_PORT: "5001"
+  
+  # ML Model Configuration
+  MODEL_UPDATE_INTERVAL: "3600"
+  PREDICTION_BATCH_SIZE: "32"
+  MODEL_VALIDATION_THRESHOLD: "0.85"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rl-service-config
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: rl-service
+data:
+  ENVIRONMENT: "production"
+  INFERENCE_WORKERS: "2"
+  METRICS_PORT: "8002"
+  MODEL_PATH: "/app/models"
+  
+  # RL Configuration
+  TRAINING_ENABLED: "false"
+  GPU_ENABLED: "false"
+  MODEL_CHECKPOINT_INTERVAL: "1800"
+  REPLAY_BUFFER_SIZE: "100000"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: redis
+data:
+  redis.conf: |
+    # Redis Production Configuration
+    bind 0.0.0.0
+    port 6379
+    timeout 300
+    tcp-keepalive 60
+    
+    # Memory Management
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # Security
+    protected-mode yes
+    
+    # Logging
+    loglevel notice
+    logfile ""
+    
+    # Performance
+    tcp-backlog 511
+    databases 16
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: nginx
+data:
+  nginx.conf: |
+    user nginx;
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+    
+    events {
+        worker_connections 1024;
+        use epoll;
+        multi_accept on;
+    }
+    
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        
+        # Logging
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for" '
+                        'rt=$request_time uct="$upstream_connect_time" '
+                        'uht="$upstream_header_time" urt="$upstream_response_time"';
+        
+        access_log /var/log/nginx/access.log main;
+        
+        # Performance
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css text/xml text/javascript application/javascript application/json;
+        
+        # Rate limiting
+        limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+        limit_req_zone $binary_remote_addr zone=login:10m rate=1r/s;
+        
+        # Upstream backends
+        upstream backend {
+            least_conn;
+            server backend-service:3000 max_fails=3 fail_timeout=30s;
+            keepalive 32;
+        }
+        
+        upstream ml-service {
+            least_conn;
+            server ml-service:5000 max_fails=3 fail_timeout=30s;
+            keepalive 16;
+        }
+        
+        upstream rl-service {
+            least_conn;
+            server rl-service:8001 max_fails=3 fail_timeout=30s;
+            keepalive 8;
+        }
+        
+        # Main server block
+        server {
+            listen 80;
+            server_name _;
+            
+            # Health check endpoint
+            location /health {
+                access_log off;
+                return 200 "healthy\n";
+                add_header Content-Type text/plain;
+            }
+            
+            # API routes
+            location /api/ {
+                limit_req zone=api burst=20 nodelay;
+                proxy_pass http://backend;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_cache_bypass $http_upgrade;
+                
+                # Timeouts
+                proxy_connect_timeout 5s;
+                proxy_send_timeout 60s;
+                proxy_read_timeout 60s;
+            }
+            
+            # ML Service routes
+            location /ml/ {
+                limit_req zone=api burst=10 nodelay;
+                proxy_pass http://ml-service/;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # Longer timeouts for ML processing
+                proxy_connect_timeout 10s;
+                proxy_send_timeout 120s;
+                proxy_read_timeout 120s;
+            }
+            
+            # RL Service routes
+            location /rl/ {
+                limit_req zone=api burst=5 nodelay;
+                proxy_pass http://rl-service/api/v1/;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # Extended timeouts for RL inference
+                proxy_connect_timeout 15s;
+                proxy_send_timeout 180s;
+                proxy_read_timeout 180s;
+            }
+            
+            # Metrics endpoint (restrict access)
+            location /metrics {
+                allow 10.0.0.0/8;
+                allow 172.16.0.0/12;
+                allow 192.168.0.0/16;
+                deny all;
+                
+                proxy_pass http://backend;
+                proxy_set_header Host $host;
+            }
+            
+            # Default location
+            location / {
+                return 404;
+            }
+        }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: trading-bot
+  labels:
+    app.kubernetes.io/name: trading-bot
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      scrape_timeout: 10s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'trading-bot-production'
+        environment: 'production'
+    
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+    
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager-service:9093
+    
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      # Backend service metrics
+      - job_name: 'backend'
+        static_configs:
+          - targets: ['backend-service:3001']
+        metrics_path: '/metrics'
+        scrape_interval: 10s
+      
+      # ML service metrics
+      - job_name: 'ml-service'
+        static_configs:
+          - targets: ['ml-service:5001']
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+      
+      # RL service metrics
+      - job_name: 'rl-service'
+        static_configs:
+          - targets: ['rl-service:8002']
+        metrics_path: '/metrics'
+        scrape_interval: 20s
+      
+      # Redis metrics
+      - job_name: 'redis'
+        static_configs:
+          - targets: ['redis-exporter:9121']
+        scrape_interval: 30s
+      
+      # Node exporter for system metrics
+      - job_name: 'node-exporter'
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: '(.*):10250'
+            target_label: __address__
+            replacement: '${1}:9100'
+      
+      # Kubernetes API server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+      
+      # Kubernetes pods
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__

@@ -19,7 +19,7 @@ export const useAuth = () => {
   useEffect(() => {
     // Check if we're in demo mode
     const isDemoMode = import.meta.env.VITE_SUPABASE_URL === 'https://placeholder.supabase.co';
-    
+
     if (isDemoMode) {
       // Auto-login with demo user in demo mode
       console.log('🎮 Demo mode activated - using demo user');
@@ -42,6 +42,12 @@ export const useAuth = () => {
       async (event, session) => {
         setUser(session?.user ?? null);
         setLoading(false);
+        if (!session?.user) {
+          try {
+            const { clearCachedUserId } = await import('../lib/supabaseAuth');
+            clearCachedUserId();
+          } catch {}
+        }
       }
     );
 
@@ -50,6 +56,10 @@ export const useAuth = () => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    try {
+      const { clearCachedUserId } = await import('../lib/supabaseAuth');
+      clearCachedUserId();
+    } catch {}
   };
 
   return {

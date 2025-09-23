@@ -1,0 +1,193 @@
+version: '3.8'
+
+services:
+  ml-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml-service
+    container_name: trading-bot-ml-service
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+      - "8000:8000"  # Metrics port
+    environment:
+      # Basic configuration
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - HOST=0.0.0.0
+      - PORT=5000
+      - WORKERS=4
+      
+      # Database configuration
+      - DATABASE_URL=postgresql://ml_service:${ML_SERVICE_DB_PASSWORD}@postgres:5432/trading_bot
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=20
+      
+      # Security
+      - ADMIN_API_KEY=${ML_SERVICE_ADMIN_KEY}
+      - FLASK_SECRET_KEY=${ML_SERVICE_SECRET_KEY}
+      
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_FILE_PATH=/app/logs/ml-service.log
+      - ENABLE_JSON_LOGGING=true
+      
+      # Performance monitoring
+      - ENABLE_METRICS=true
+      - ENABLE_PERFORMANCE_TRACKING=true
+      
+      # Alerting (optional)
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      
+      # Adaptation settings
+      - ADAPTATION_LEARNING_RATE=0.01
+      - ADAPTATION_PERFORMANCE_WINDOW=100
+      - ADAPTATION_MIN_TRADES=10
+      
+      # Cache settings
+      - ENABLE_REDIS_CACHE=true
+      - REDIS_URL=redis://redis:6379/1
+    
+    volumes:
+      - ml_service_logs:/app/logs
+      - ml_service_data:/app/data
+      - ./ml_service_config.yaml:/app/config.yaml:ro
+    
+    depends_on:
+      - postgres
+      - redis
+    
+    networks:
+      - trading-bot-network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ml-service.rule=Host(`ml.yourdomain.com`)"
+      - "traefik.http.routers.ml-service.tls=true"
+      - "traefik.http.routers.ml-service.tls.certresolver=letsencrypt"
+      - "traefik.http.services.ml-service.loadbalancer.server.port=5000"
+
+  # Database service (if not already defined elsewhere)
+  postgres:
+    image: postgres:15-alpine
+    container_name: trading-bot-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=trading_bot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - ML_SERVICE_DB_PASSWORD=${ML_SERVICE_DB_PASSWORD}
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-ml-service-db.sql:/docker-entrypoint-initdb.d/02-ml-service.sql:ro
+    
+    ports:
+      - "5432:5432"
+    
+    networks:
+      - trading-bot-network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis service for caching
+  redis:
+    image: redis:7-alpine
+    container_name: trading-bot-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    
+    volumes:
+      - redis_data:/data
+    
+    ports:
+      - "6379:6379"
+    
+    networks:
+      - trading-bot-network
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring services (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: trading-bot-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - trading-bot-network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: trading-bot-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - trading-bot-network
+    profiles:
+      - monitoring
+
+volumes:
+  ml_service_logs:
+    driver: local
+  ml_service_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  trading-bot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
