@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   max_position_size_percent DECIMAL(5, 2) DEFAULT 10.0,
   max_drawdown_percent DECIMAL(5, 2) DEFAULT 15.0,
   volatility_tolerance VARCHAR(10) DEFAULT 'medium', -- 'low', 'medium', 'high'
-  confidence_threshold DECIMAL(5, 2) DEFAULT 75.0,
+  confidence_threshold DECIMAL(5, 2) DEFAULT 65.0,
   risk_reward_minimum DECIMAL(5, 2) DEFAULT 3.0, -- 1:3 ratio
   
   -- Strategy Settings

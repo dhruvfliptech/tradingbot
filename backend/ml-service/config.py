@@ -45,8 +45,8 @@ class AdaptationConfig:
         float(os.getenv('RSI_MAX_THRESHOLD', '90.0'))
     )
     confidence_bounds: tuple = (
-        float(os.getenv('CONFIDENCE_MIN_THRESHOLD', '0.5')),
-        float(os.getenv('CONFIDENCE_MAX_THRESHOLD', '0.95'))
+        float(os.getenv('CONFIDENCE_MIN_THRESHOLD', '0.2')),
+        float(os.getenv('CONFIDENCE_MAX_THRESHOLD', '1.0'))
     )
     macd_bounds: tuple = (
         float(os.getenv('MACD_MIN_THRESHOLD', '-0.1')),
@@ -64,7 +64,7 @@ class AdaptationConfig:
     # Default parameter values
     default_parameters: Dict[str, float] = field(default_factory=lambda: {
         'rsi_threshold': float(os.getenv('DEFAULT_RSI_THRESHOLD', '70.0')),
-        'confidence_threshold': float(os.getenv('DEFAULT_CONFIDENCE_THRESHOLD', '0.75')),
+        'confidence_threshold': float(os.getenv('DEFAULT_CONFIDENCE_THRESHOLD', '0.65')),
         'macd_threshold': float(os.getenv('DEFAULT_MACD_THRESHOLD', '0.0')),
         'volume_threshold': float(os.getenv('DEFAULT_VOLUME_THRESHOLD', '1000000000')),
         'momentum_threshold': float(os.getenv('DEFAULT_MOMENTUM_THRESHOLD', '2.0'))
