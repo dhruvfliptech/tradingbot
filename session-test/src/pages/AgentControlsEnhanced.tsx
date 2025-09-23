@@ -541,8 +541,8 @@ export const AgentControlsEnhanced: React.FC = () => {
                     </div>
                     <input
                       type="range"
-                      min="0.5"
-                      max="0.9"
+                      min="0.2"
+                      max="1.0"
                       step="0.05"
                       value={settings.confidenceThreshold}
                       onChange={(e) => {
@@ -552,9 +552,9 @@ export const AgentControlsEnhanced: React.FC = () => {
                       className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>50%</span>
+                      <span>20%</span>
                       <span className="text-yellow-400">{getAISuggestedValue('confidenceThreshold')}</span>
-                      <span>90%</span>
+                      <span>100%</span>
                     </div>
                   </div>
                   

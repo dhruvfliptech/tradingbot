@@ -131,7 +131,7 @@ export class ComposerAdaptiveIntegration extends EventEmitter {
       description: 'Dynamic trading strategy with adaptive thresholds',
       parameters: [
         { name: 'rsi_threshold', type: 'number', defaultValue: 70, min: 50, max: 90, description: 'RSI overbought threshold' },
-        { name: 'confidence_threshold', type: 'number', defaultValue: 0.75, min: 0.5, max: 0.95, description: 'Minimum confidence for trades' },
+        { name: 'confidence_threshold', type: 'number', defaultValue: 0.65, min: 0.2, max: 1.0, description: 'Minimum confidence for trades' },
         { name: 'momentum_threshold', type: 'number', defaultValue: 2.0, min: 0.5, max: 5.0, description: 'Minimum momentum for signals' },
         { name: 'volume_threshold', type: 'number', defaultValue: 1000000, min: 100000, max: 10000000, description: 'Minimum volume requirement' },
         { name: 'macd_threshold', type: 'number', defaultValue: 0.0, min: -0.5, max: 0.5, description: 'MACD signal threshold' }

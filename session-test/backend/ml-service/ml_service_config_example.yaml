@@ -31,7 +31,7 @@ adaptation:
   
   # Threshold bounds (min, max)
   rsi_bounds: [50.0, 90.0]
-  confidence_bounds: [0.5, 0.95]
+  confidence_bounds: [0.2, 1.0]
   macd_bounds: [-0.1, 0.1]
   volume_bounds: [100000000, 10000000000]
   momentum_bounds: [1.0, 5.0]

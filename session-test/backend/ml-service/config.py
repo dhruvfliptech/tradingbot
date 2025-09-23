@@ -45,8 +45,8 @@ class AdaptationConfig:
         float(os.getenv('RSI_MAX_THRESHOLD', '90.0'))
     )
     confidence_bounds: tuple = (
-        float(os.getenv('CONFIDENCE_MIN_THRESHOLD', '0.5')),
-        float(os.getenv('CONFIDENCE_MAX_THRESHOLD', '0.95'))
+        float(os.getenv('CONFIDENCE_MIN_THRESHOLD', '0.2')),
+        float(os.getenv('CONFIDENCE_MAX_THRESHOLD', '1.0'))
     )
     macd_bounds: tuple = (
         float(os.getenv('MACD_MIN_THRESHOLD', '-0.1')),
