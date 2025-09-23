@@ -41,11 +41,17 @@ class BinanceBroker implements TradingBroker {
   private secretKey: string;
   private baseUrl: string;
   private recvWindow = Number(import.meta.env.VITE_BINANCE_RECV_WINDOW || 5000);
+  private useProxy: boolean;
 
   constructor() {
     this.apiKey = import.meta.env.VITE_BINANCE_API_KEY || '';
     this.secretKey = import.meta.env.VITE_BINANCE_SECRET_KEY || '';
     this.baseUrl = (import.meta.env.VITE_BINANCE_BASE_URL || 'https://api.binance.com').replace(/\/$/, '');
+    
+    // Use proxy in development or when running in browser
+    // Check if we're running with Netlify Dev (localhost:8888) or regular dev server
+    this.useProxy = import.meta.env.DEV || (typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
 
     void this.initializeApiKeys();
   }
@@ -105,6 +111,98 @@ class BinanceBroker implements TradingBroker {
   }
 
   private async request<T = any>(path: string, options: {
+    method?: 'GET' | 'POST' | 'DELETE';
+    params?: Record<string, string | number | undefined | null>;
+    signed?: boolean;
+    timeoutMs?: number;
+  } = {}): Promise<T> {
+    const method = options.method || 'GET';
+    
+    // If using proxy, send the request through Netlify function
+    if (this.useProxy) {
+      return this.requestViaProxy<T>(path, options);
+    }
+    
+    // Direct API call (for server-side usage)
+    return this.requestDirect<T>(path, options);
+  }
+
+  private async requestViaProxy<T = any>(path: string, options: {
+    method?: 'GET' | 'POST' | 'DELETE';
+    params?: Record<string, string | number | undefined | null>;
+    signed?: boolean;
+    timeoutMs?: number;
+  } = {}): Promise<T> {
+    const method = options.method || 'GET';
+    const params = new URLSearchParams();
+
+    if (options.params) {
+      for (const [key, value] of Object.entries(options.params)) {
+        if (value === undefined || value === null || value === '') continue;
+        params.append(key, String(value));
+      }
+    }
+
+    // Build proxy URL
+    const proxyUrl = `/.netlify/functions/binance-proxy${path}`;
+    let url = proxyUrl;
+    let body: string | undefined;
+
+    let headers: Record<string, string> = {};
+
+    // For signed requests, send API key in header
+    if (options.signed) {
+      const { apiKey } = await this.getCredentials();
+      if (!apiKey) {
+        throw new Error('Binance API key is not configured');
+      }
+      headers['X-MBX-APIKEY'] = apiKey;
+    }
+
+    if (method === 'POST') {
+      // For POST requests, send all parameters in the body, not in URL
+      const queryString = params.toString();
+      if (queryString) {
+        body = queryString;
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      }
+    } else {
+      // For GET/DELETE requests, send parameters in URL
+      const queryString = params.toString();
+      if (queryString) {
+        url = `${proxyUrl}?${queryString}`;
+      }
+    }
+
+    const controller = new AbortController();
+    const timeout = options.timeoutMs || 10000;
+    const timer = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Binance API error ${response.status}: ${errorText}`);
+        throw new Error(`Binance API error ${response.status}: ${errorText}`);
+      }
+
+      if (response.status === 204) {
+        return {} as T;
+      }
+
+      return await response.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async requestDirect<T = any>(path: string, options: {
     method?: 'GET' | 'POST' | 'DELETE';
     params?: Record<string, string | number | undefined | null>;
     signed?: boolean;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Bitcoin, LogOut, User, Wifi, WifiOff, AlertCircle, Fish, X, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react';
+import { Activity, Bitcoin, LogOut, User, Wifi, WifiOff, AlertCircle, Fish, X, Settings as SettingsIcon, SlidersHorizontal, Square } from 'lucide-react';
 import { DraggableGrid } from '../components/Dashboard/DraggableGrid';
 import { AccountSummary } from '../components/Dashboard/AccountSummary';
 import { PositionsTable } from '../components/Dashboard/PositionsTable';
@@ -29,15 +29,21 @@ import { useAuth } from '../hooks/useAuth';
 import { useVirtualPortfolio } from '../hooks/useVirtualPortfolio';
 import { useTradingProvider } from '../hooks/useTradingProvider';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
+import { useEmergencyStop } from '../hooks/useEmergencyStop';
 import { useWebSocket } from '../services/websocketService';
 import { tradingProviderService } from '../services/tradingProviderService';
 import { coinGeckoService } from '../services/coinGeckoService';
 import { supabase } from '../lib/supabase';
 import { Account, Position, Order, CryptoData } from '../types/trading';
 import { TradingModeToggle } from '../components/TradingModeToggle';
+import { tradingAgentV2 } from '../services/tradingAgentV2';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  
+  // Emergency stop functionality
+  useEmergencyStop();
+  
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -498,144 +504,190 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Header */}
+      {/* Header - Redesigned with better organization */}
       <header className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-[1600px] mx-auto px-2 sm:px-4 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center">
-                <Bitcoin className="h-6 w-6 sm:h-8 sm:w-8 text-orange-400" />
-                <h1 className="ml-2 sm:ml-3 text-lg sm:text-xl font-bold text-white hidden sm:block">AI Crypto Trading Agent</h1>
-                <h1 className="ml-2 text-sm font-bold text-white sm:hidden">AI Crypto</h1>
-              </div>
-              <div className="px-2 sm:px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-xs sm:text-sm">
-                $50K PORTFOLIO
-              </div>
-              {/* Agent Status in Nav */}
-              <div className={`flex items-center px-3 py-1 rounded-full text-xs sm:text-sm ${
-                tradingAgent.isRunning() ? 'bg-green-900/30' : 'bg-red-900/30'
-              }`}>
-                <div className={`w-2 h-2 rounded-full mr-2 ${
-                  tradingAgent.isRunning() ? 'bg-green-400 animate-pulse' : 'bg-red-400'
-                }`} />
-                <span className={tradingAgent.isRunning() ? 'text-green-400' : 'text-red-400'}>
-                  Agent {tradingAgent.isRunning() ? 'Active' : 'Paused'}
-                </span>
-              </div>
-              {/* Quick Stats */}
-              <div className="hidden lg:flex items-center space-x-4 text-xs text-gray-400">
-                <div>
-                  Positions: <span className="text-white">{positions.length}/10</span>
+        {/* Primary Header - Branding and Primary Actions */}
+        <div className="bg-gray-800 border-b border-gray-700">
+          <div className="max-w-[1600px] mx-auto px-2 sm:px-4 lg:px-8">
+            <div className="flex items-center justify-between h-16 sm:h-18 py-2">
+              {/* Left: Branding */}
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center">
+                  <Bitcoin className="h-6 w-6 sm:h-8 sm:w-8 text-orange-400" />
+                  <h1 className="ml-2 sm:ml-3 text-lg sm:text-xl font-bold text-white hidden sm:block">AI Crypto Trading Agent</h1>
+                  <h1 className="ml-2 text-sm font-bold text-white sm:hidden">AI Crypto</h1>
                 </div>
-                <div>
-                  Today: <span className="text-white">
-                    {orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).length} trades
-                  </span>
+                <div className="px-2 sm:px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-xs sm:text-sm">
+                  $50K PORTFOLIO
+                </div>
+              </div>
+
+              {/* Right: Primary Actions and User Info */}
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                {/* Trading Mode Toggle */}
+                <TradingModeToggle />
+                
+                {/* Primary Action Buttons */}
+                <div className="flex items-center space-x-2">
+                  {/* Emergency Stop Button */}
+                  <button
+                    onClick={async () => {
+                      if (confirm('Are you sure you want to stop the auto-trading agent?')) {
+                        try {
+                          await tradingAgentV2.stop();
+                          alert('Auto-trading agent stopped successfully!');
+                        } catch (error) {
+                          console.error('Failed to stop agent:', error);
+                          alert('Failed to stop agent. Please try again.');
+                        }
+                      }
+                    }}
+                    className="flex items-center px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+                    title="Emergency Stop Auto-Trading"
+                  >
+                    <Square className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Stop Agent</span>
+                    <span className="sm:hidden">Stop</span>
+                  </button>
+
+                  {/* Configure Agent Button - Primary CTA */}
+                  <button
+                    onClick={() => navigate('/agent-controls')}
+                    className="flex items-center px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    <SlidersHorizontal className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Configure Agent</span>
+                    <span className="sm:hidden">Agent</span>
+                  </button>
+                </div>
+
+                {/* User Info and Settings */}
+                <div className="flex items-center space-x-2 pl-2 border-l border-gray-700">
+                  <div className="hidden md:flex items-center text-gray-300 text-sm">
+                    <User className="h-4 w-4 mr-2" />
+                    <span className="max-w-[120px] truncate">{user?.email}</span>
+                  </div>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center p-2 text-gray-400 hover:text-white transition-colors"
+                    title="Sign Out"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => setShowSettings(true)}
+                    className="flex items-center p-2 text-gray-400 hover:text-white transition-colors"
+                    title="Settings"
+                  >
+                    <SettingsIcon className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-4 relative">
-              <div className="mr-2">
-                <TradingModeToggle />
-              </div>
-              {/* Configure Agent Button - Primary CTA */}
-              <button
-                onClick={() => navigate('/agent-controls')}
-                className="flex items-center px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
-              >
-                <SlidersHorizontal className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Configure Agent</span>
-                <span className="sm:hidden">Agent</span>
-              </button>
+          </div>
+        </div>
 
-              {/* User Impact Metric */}
-              {portfolioStats && (
-                <div className="hidden lg:flex items-center text-gray-300 text-sm">
-                  <span>User Impact: </span>
-                  <span className={`ml-1 font-medium ${portfolioStats.userImpact >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {portfolioStats.userImpact >= 0 ? '+' : ''}{portfolioStats.userImpact.toFixed(1)}%
+        {/* Secondary Header - Status and Quick Actions */}
+        <div className="bg-gray-800/50 border-b border-gray-700">
+          <div className="max-w-[1600px] mx-auto px-2 sm:px-4 lg:px-8">
+            <div className="flex items-center justify-between h-12 sm:h-14 py-2">
+              {/* Left: Agent Status and Quick Stats */}
+              <div className="flex items-center space-x-4">
+                {/* Agent Status */}
+                <div className={`flex items-center px-3 py-1 rounded-full text-xs sm:text-sm ${
+                  tradingAgent.isRunning() ? 'bg-green-900/30' : 'bg-red-900/30'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full mr-2 ${
+                    tradingAgent.isRunning() ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+                  }`} />
+                  <span className={tradingAgent.isRunning() ? 'text-green-400' : 'text-red-400'}>
+                    Agent {tradingAgent.isRunning() ? 'Active' : 'Paused'}
                   </span>
                 </div>
-              )}
-             
-              {/* API Status */}
-              <button
-                onClick={() => setShowApiStatus(true)}
-                className="flex items-center px-2 sm:px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-                title="Click to view detailed API status"
-              >
-                {(() => {
-                  const status = getOverallApiStatus();
-                  return (
-                    <>
-                      <status.icon className={`h-4 w-4 mr-2 ${status.color}`} />
-                      <span className={`text-xs sm:text-sm ${status.color} hidden sm:inline`}>
-                        APIs
-                      </span>
-                    </>
-                  );
-                })()}
-              </button>
 
-              {/* Whale Alerts */}
-              <div className="relative">
-                <button
-                  onClick={toggleWhalePanel}
-                  className={`flex items-center px-2 py-1 rounded-lg transition-colors ${showWhalePanel ? 'bg-indigo-700' : 'bg-gray-700 hover:bg-gray-600'}`}
-                  title="Whale activity (auto-refresh every 2 min)"
-                >
-                  <Fish className="h-4 w-4 text-indigo-300" />
-                </button>
-                {showWhalePanel && (
-                  <div className="absolute right-0 mt-2 w-[380px] max-h-[480px] overflow-y-auto bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
-                      <div className="text-white font-semibold text-sm">Whale Activity (Auto-refresh: 2min)</div>
-                      <button onClick={() => setShowWhalePanel(false)} className="text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>
-                    </div>
-                    <div className="p-3 space-y-2">
-                      {whaleLoading ? (
-                        <div className="text-gray-400 text-sm">Loading large transfers…</div>
-                      ) : whaleEvents.length === 0 ? (
-                        <div className="text-gray-400 text-sm">No recent $1M+ transfers.</div>
-                      ) : (
-                        whaleEvents.map(e => (
-                          <div key={e.id} className="bg-gray-800 rounded p-3">
-                            <div className="flex items-center justify-between">
-                              <div className="text-white font-medium">{e.symbol}</div>
-                              <div className="text-gray-400 text-xs">{new Date(e.timestamp).toLocaleTimeString()}</div>
-                            </div>
-                            <div className="text-gray-300 text-sm">
-                              {e.amount.toLocaleString()} {e.symbol} {e.usdValue ? `(≈$${Math.round(e.usdValue).toLocaleString()})` : ''}
-                            </div>
-                            {e.note && <div className="text-gray-500 text-xs mt-1">{e.note}</div>}
-                          </div>
-                        ))
-                      )}
-                    </div>
+                {/* Quick Stats */}
+                <div className="hidden sm:flex items-center space-x-4 text-xs text-gray-400">
+                  <div className="flex items-center">
+                    <span>Positions:</span>
+                    <span className="ml-1 text-white font-medium">{positions.length}/10</span>
                   </div>
-                )}
+                  <div className="flex items-center">
+                    <span>Today:</span>
+                    <span className="ml-1 text-white font-medium">
+                      {orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).length} trades
+                    </span>
+                  </div>
+                  {/* User Impact Metric */}
+                  {portfolioStats && (
+                    <div className="flex items-center">
+                      <span>Impact:</span>
+                      <span className={`ml-1 font-medium ${portfolioStats.userImpact >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {portfolioStats.userImpact >= 0 ? '+' : ''}{portfolioStats.userImpact.toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-             
-              <div className="hidden md:flex items-center text-gray-300 text-sm">
-                <User className="h-4 w-4 mr-2" />
-                <span>{user?.email}</span>
-              </div>
-              <button
-                onClick={handleSignOut}
-                className="flex items-center p-2 text-gray-400 hover:text-white transition-colors"
-                title="Sign Out"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
 
-              {/* Settings */}
-              <button
-                onClick={() => setShowSettings(true)}
-                className="flex items-center px-2 sm:px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-                title="Settings"
-              >
-                <SettingsIcon className="h-4 w-4" />
-              </button>
+              {/* Right: Status Indicators and Quick Actions */}
+              <div className="flex items-center space-x-2">
+                {/* API Status */}
+                <button
+                  onClick={() => setShowApiStatus(true)}
+                  className="flex items-center px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-xs"
+                  title="Click to view detailed API status"
+                >
+                  {(() => {
+                    const status = getOverallApiStatus();
+                    return (
+                      <>
+                        <status.icon className={`h-3 w-3 mr-1 ${status.color}`} />
+                        <span className={`${status.color} hidden sm:inline`}>APIs</span>
+                      </>
+                    );
+                  })()}
+                </button>
+
+                {/* Whale Alerts */}
+                <div className="relative">
+                  <button
+                    onClick={toggleWhalePanel}
+                    className={`flex items-center px-2 py-1 rounded-lg transition-colors text-xs ${showWhalePanel ? 'bg-indigo-700' : 'bg-gray-700 hover:bg-gray-600'}`}
+                    title="Whale activity (auto-refresh every 2 min)"
+                  >
+                    <Fish className="h-3 w-3 text-indigo-300" />
+                    <span className="ml-1 hidden sm:inline text-indigo-300">Whale</span>
+                  </button>
+                  {showWhalePanel && (
+                    <div className="absolute right-0 mt-2 w-[380px] max-h-[480px] overflow-y-auto bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
+                        <div className="text-white font-semibold text-sm">Whale Activity (Auto-refresh: 2min)</div>
+                        <button onClick={() => setShowWhalePanel(false)} className="text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>
+                      </div>
+                      <div className="p-3 space-y-2">
+                        {whaleLoading ? (
+                          <div className="text-gray-400 text-sm">Loading large transfers…</div>
+                        ) : whaleEvents.length === 0 ? (
+                          <div className="text-gray-400 text-sm">No recent $1M+ transfers.</div>
+                        ) : (
+                          whaleEvents.map(e => (
+                            <div key={e.id} className="bg-gray-800 rounded p-3">
+                              <div className="flex items-center justify-between">
+                                <div className="text-white font-medium">{e.symbol}</div>
+                                <div className="text-gray-400 text-xs">{new Date(e.timestamp).toLocaleTimeString()}</div>
+                              </div>
+                              <div className="text-gray-300 text-sm">
+                                {e.amount.toLocaleString()} {e.symbol} {e.usdValue ? `(≈$${Math.round(e.usdValue).toLocaleString()})` : ''}
+                              </div>
+                              {e.note && <div className="text-gray-500 text-xs mt-1">{e.note}</div>}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

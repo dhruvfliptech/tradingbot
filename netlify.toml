@@ -5,4 +5,14 @@
 [functions]
   directory = "netlify/functions"
 
+[[redirects]]
+  from = "/api/whale-alert-proxy"
+  to = "/.netlify/functions/whale-alert-proxy"
+  status = 200
+
+[[redirects]]
+  from = "/api/binance-proxy/*"
+  to = "/.netlify/functions/binance-proxy/:splat"
+  status = 200
+
 
