@@ -419,7 +419,7 @@ class VirtualPortfolioService {
       .eq('portfolio_id', this.portfolio.id)
       .eq('user_id', userId)
       .eq('snapshot_date', today)
-      .single();
+      .maybeSingle();
     
     if (existing) return; // Already have today's snapshot
     
@@ -433,7 +433,7 @@ class VirtualPortfolioService {
       .eq('portfolio_id', this.portfolio.id)
       .eq('user_id', userId)
       .eq('snapshot_date', yesterday)
-      .single();
+      .maybeSingle();
     
     const openingBalance = yesterdaySnapshot?.closing_balance || this.portfolio.initial_balance;
     const dailyPnL = totalValue - openingBalance;
@@ -458,9 +458,15 @@ class VirtualPortfolioService {
       risk_adjusted_return: 0 // Will be calculated at end of day
     };
     
-    await supabase
+    const { error } = await supabase
       .from(this.DAILY_PERFORMANCE_TABLE)
-      .insert([snapshot]);
+      .upsert([snapshot], {
+        onConflict: 'portfolio_id,snapshot_date'
+      });
+    
+    if (error) {
+      console.error('Error creating daily snapshot:', error);
+    }
   }
 
   /**

@@ -200,14 +200,11 @@ class ApiKeysService {
         .eq('provider', provider)
         .eq('key_name', keyName)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No rows found - return null instead of throwing
-          return null;
-        }
-        throw error;
+        console.error(`Error fetching API key for ${provider}.${keyName}:`, error);
+        return null;
       }
 
       if (!data) return null;
@@ -636,6 +633,7 @@ class ApiKeysService {
       'binance.api_key': 'VITE_BINANCE_API_KEY',
       'binance.secret_key': 'VITE_BINANCE_SECRET_KEY',
       'groq.api_key': 'VITE_GROQ_API_KEY',
+      'etherscan.api_key': 'VITE_ETHERSCAN_API_KEY',
       // Add more mappings as needed
     };
 

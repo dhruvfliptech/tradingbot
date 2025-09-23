@@ -121,6 +121,15 @@ class EtherscanService {
       console.log('🌐 Making Etherscan API request');
       
       const apiKey = await this.getApiKey();
+      
+      // If no API key is available, return empty data instead of failing
+      if (!apiKey) {
+        console.log('⚠️ No Etherscan API key found, returning empty data');
+        const emptyData = { status: '1', message: 'OK', result: [] };
+        this.setCache(cacheKey, emptyData);
+        return emptyData;
+      }
+      
       const searchParams = new URLSearchParams({
         ...params,
         apikey: apiKey,
@@ -142,6 +151,13 @@ class EtherscanService {
       const data = await response.json();
 
       if (data.status === '0' && data.message !== 'No transactions found') {
+        // Handle common Etherscan API errors gracefully
+        if (data.message === 'NOTOK' || data.message === 'Invalid API Key') {
+          console.log('⚠️ Etherscan API key issue, returning empty data');
+          const emptyData = { status: '1', message: 'OK', result: [] };
+          this.setCache(cacheKey, emptyData);
+          return emptyData;
+        }
         throw new Error(`Etherscan API Error: ${data.message}`);
       }
 
@@ -156,7 +172,12 @@ class EtherscanService {
           console.error('❌ Etherscan API error:', error.message);
         }
       }
-      throw error;
+      
+      // Return empty data instead of throwing to prevent UI crashes
+      console.log('🔄 Returning empty data due to Etherscan error');
+      const emptyData = { status: '1', message: 'OK', result: [] };
+      this.setCache(cacheKey, emptyData);
+      return emptyData;
     }
   }
 

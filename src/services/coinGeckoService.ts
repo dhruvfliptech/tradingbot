@@ -7,11 +7,21 @@ class CoinGeckoService {
   private baseUrl: string;
   private apiKey: string;
   private headers: Record<string, string>;
+  private cache: Map<string, { data: any; timestamp: number }>;
+  private rateLimitDelay: number;
+  private lastRequestTime: number;
+  private requestQueue: Array<() => Promise<void>>;
+  private isProcessingQueue: boolean;
 
   constructor() {
     const isDev = import.meta.env.DEV;
     this.baseUrl = isDev ? '/coingecko/api/v3' : 'https://api.coingecko.com/api/v3';
     this.apiKey = import.meta.env.VITE_COINGECKO_API_KEY || '';
+    this.cache = new Map();
+    this.rateLimitDelay = 2000; // 2 seconds between requests
+    this.lastRequestTime = 0;
+    this.requestQueue = [];
+    this.isProcessingQueue = false;
     
     // Initialize headers without API key for now
     this.headers = {
@@ -50,7 +60,55 @@ class CoinGeckoService {
     };
   }
 
+  private getCacheKey(url: string): string {
+    return `coingecko_${url.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  }
+
+  private getFromCache(key: string): any | null {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < 300000) { // 5 minutes cache
+      console.log('🔄 Using cached CoinGecko data');
+      return cached.data;
+    }
+    return null;
+  }
+
+  private setCache(key: string, data: any): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+    
+    // Clean old cache entries (keep only last 20 entries)
+    if (this.cache.size > 20) {
+      const keys = Array.from(this.cache.keys());
+      for (let i = 0; i < 5; i++) {
+        this.cache.delete(keys[i]);
+      }
+    }
+  }
+
+  private async rateLimitedRequest(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.rateLimitDelay) {
+      const delay = this.rateLimitDelay - timeSinceLastRequest;
+      console.log(`⏳ Rate limiting: waiting ${delay}ms before next request`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+
   private async makeRequest(url: string, options: RequestInit = {}): Promise<any> {
+    // Check cache first
+    const cacheKey = this.getCacheKey(url);
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Apply rate limiting
+    await this.rateLimitedRequest();
+
     try {
       console.log('🌐 Making CoinGecko API request to:', url);
       
@@ -59,7 +117,7 @@ class CoinGeckoService {
       
       // Add timeout and better error handling for network issues
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
       const response = await fetch(url, {
         ...options,
@@ -75,32 +133,11 @@ class CoinGeckoService {
       if (!response.ok) {
         const errorText = await response.text();
         
-        // Only use fallback for severe rate limiting (429) after multiple retries
+        // Handle rate limiting with exponential backoff
         if (response.status === 429) {
-          console.warn(`⚠️ CoinGecko API throttled (429), attempting retry...`);
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          // Try one more time
-          const retryController = new AbortController();
-          const retryTimeoutId = setTimeout(() => retryController.abort(), 10000);
-          
-          const retryResponse = await fetch(url, {
-            ...options,
-            headers: {
-              ...headers,
-              ...options.headers,
-            },
-            signal: retryController.signal,
-          });
-          
-          clearTimeout(retryTimeoutId);
-          
-          if (retryResponse.ok) {
-            console.log('✅ Retry successful');
-            return await retryResponse.json();
-          } else {
-            console.warn('⚠️ Retry failed, using fallback data');
-            return this.getFallbackData(url);
-          }
+          console.warn(`⚠️ CoinGecko API rate limited (429), using fallback data`);
+          console.log('💡 Consider adding VITE_COINGECKO_API_KEY to your .env file for higher rate limits');
+          return this.getFallbackData(url);
         } else {
           console.error(`❌ CoinGecko API error! status: ${response.status}, message: ${errorText}`);
         }
@@ -109,13 +146,17 @@ class CoinGeckoService {
         throw new Error(`CoinGecko API Error: ${response.status} - ${errorText}`);
       }
 
+      const data = await response.json();
       console.log('✅ CoinGecko API request successful');
-      return await response.json();
+      
+      // Cache the successful response
+      this.setCache(cacheKey, data);
+      return data;
     } catch (error) {
       // Handle specific network errors
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          console.error('❌ CoinGecko API request timed out after 10 seconds');
+          console.error('❌ CoinGecko API request timed out after 15 seconds');
         } else if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
           console.error('❌ Network error accessing CoinGecko API. This could be due to:');
           console.error('   • Missing or invalid VITE_COINGECKO_API_KEY in .env file');
@@ -361,6 +402,51 @@ class CoinGeckoService {
     };
 
     return tradingProviderService.placeOrder(params);
+  }
+
+  // Method to clear cache (useful for testing or manual refresh)
+  clearCache(): void {
+    this.cache.clear();
+    console.log('🗑️ CoinGecko cache cleared');
+  }
+
+  // Method to get cache status
+  getCacheStatus(): { size: number; entries: string[] } {
+    return {
+      size: this.cache.size,
+      entries: Array.from(this.cache.keys())
+    };
+  }
+
+  // Method to test API connectivity
+  async testConnection(): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('🔍 Testing CoinGecko API connection...');
+      
+      const testUrl = `${this.baseUrl}/ping`;
+      const response = await fetch(testUrl, { 
+        method: 'GET',
+        headers: await this.getHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          message: `Connection successful: ${data.gecko_says || 'API operational'}`
+        };
+      } else {
+        return {
+          success: false,
+          message: `API returned HTTP ${response.status}: ${response.statusText}`
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
   }
 }
 

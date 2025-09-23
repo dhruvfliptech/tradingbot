@@ -216,7 +216,7 @@ class TradingAgentV2 {
         );
 
         // CRITICAL: Check confidence threshold BEFORE attempting trade
-        const threshold = (this.settings?.confidenceThreshold || 0.78) * 100; // Convert to percentage
+        const threshold = (this.settings?.confidenceThreshold || 0.65) * 100; // Convert to percentage (lowered from 78% to 65%)
         if (signal.confidence < threshold) {
           console.log(`🚫 Signal blocked: ${signal.symbol} confidence ${signal.confidence}% < threshold ${threshold}%`);
           
@@ -331,7 +331,7 @@ class TradingAgentV2 {
         qty: quantity,
         side: 'buy',
         order_type: 'market',
-        time_in_force: 'day',
+        time_in_force: 'gtc', // Use 'gtc' for crypto orders (required by Alpaca)
       });
 
       // Update trade record with order details
@@ -398,18 +398,32 @@ class TradingAgentV2 {
     for (const crypto of data) {
       // Update price history for technical analysis
       this.updatePriceHistory(crypto);
-      const priceData = this.priceHistory.get(crypto.symbol) || [];
+      let priceData = this.priceHistory.get(crypto.symbol) || [];
       
+      // If we don't have enough data, try to fetch historical data or use fallback analysis
       if (priceData.length < 26) {
-        // Not enough data for technical analysis
-        signals.push({
-          symbol: crypto.symbol,
-          action: 'HOLD',
-          confidence: 0,
-          price: crypto.price,
-          timestamp: new Date().toISOString()
-        });
-        continue;
+        console.log(`⚠️ Insufficient price history for ${crypto.symbol} (${priceData.length}/26), attempting to fetch historical data...`);
+        
+        // Try to fetch historical data from CoinGecko
+        try {
+          const historicalData = await this.fetchHistoricalData(crypto.symbol);
+          if (historicalData.length > 0) {
+            // Merge historical data with current data
+            const mergedData = [...historicalData, ...priceData];
+            this.priceHistory.set(crypto.symbol, mergedData);
+            priceData = mergedData;
+            console.log(`✅ Fetched ${historicalData.length} historical data points for ${crypto.symbol}`);
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch historical data for ${crypto.symbol}:`, error);
+        }
+        
+        // If still not enough data, use simplified analysis
+        if (priceData.length < 26) {
+          const simplifiedSignal = this.generateSimplifiedSignal(crypto);
+          signals.push(simplifiedSignal);
+          continue;
+        }
       }
       
       // Calculate real technical indicators
@@ -471,6 +485,26 @@ class TradingAgentV2 {
       } else if (composite.signal === 'sell') {
         action = 'SELL';
         baseConfidence = 65;
+      } else if (composite.signal === 'neutral') {
+        // For neutral signals, use momentum-based decision when confidence threshold is low
+        const momentumThreshold = this.settings?.confidenceThreshold || 0.65;
+        if (momentumThreshold <= 0.3) { // Very low threshold - be more aggressive
+          if (crypto.changePercent > 1) {
+            action = 'BUY';
+            baseConfidence = 35;
+          } else if (crypto.changePercent < -1) {
+            action = 'SELL';
+            baseConfidence = 35;
+          }
+        } else if (momentumThreshold <= 0.5) { // Low threshold - moderate aggressiveness
+          if (crypto.changePercent > 2) {
+            action = 'BUY';
+            baseConfidence = 45;
+          } else if (crypto.changePercent < -2) {
+            action = 'SELL';
+            baseConfidence = 45;
+          }
+        }
       }
 
       // Integrate strategy signals (30% weight for strategies, 70% for validators)
@@ -500,6 +534,21 @@ class TradingAgentV2 {
       if (strategyScore > 80) {
         combinedConfidence = Math.min(95, combinedConfidence + 10);
       }
+      
+      // Fallback for very low confidence thresholds - force some signals
+      const currentThreshold = this.settings?.confidenceThreshold || 0.65;
+      if (currentThreshold <= 0.25 && action === 'HOLD' && combinedConfidence < 30) {
+        // Force a signal based on price movement when threshold is very low
+        if (crypto.changePercent > 0.2) {
+          action = 'BUY';
+          combinedConfidence = 25;
+          console.log(`🔄 Forced BUY signal for ${crypto.symbol} due to low threshold (${currentThreshold}) and positive momentum`);
+        } else if (crypto.changePercent < -0.2) {
+          action = 'SELL';
+          combinedConfidence = 25;
+          console.log(`🔄 Forced SELL signal for ${crypto.symbol} due to low threshold (${currentThreshold}) and negative momentum`);
+        }
+      }
 
       // Apply target return logic - reduce risk if approaching weekly target
       const targetProgress = this.weeklyPnL / this.targetReturnWeekly;
@@ -520,6 +569,19 @@ class TradingAgentV2 {
         technicalScore: composite.score,
         strategySignals: strategySignals
       };
+      
+      // Debug logging for signal generation
+      console.log(`🎯 Signal generated for ${crypto.symbol}:`, {
+        action,
+        confidence: combinedConfidence,
+        compositeSignal: composite.signal,
+        compositeScore: composite.score,
+        strategyScore,
+        priceChange: crypto.changePercent,
+        threshold: this.settings?.confidenceThreshold || 0.65,
+        rsi: rsiResult.value,
+        macdTrend: macdResult.trend
+      });
       
       // Run through validator system if not HOLD
       if (action !== 'HOLD') {
@@ -572,6 +634,110 @@ class TradingAgentV2 {
     }
     
     this.priceHistory.set(crypto.symbol, history);
+  }
+
+  /**
+   * Fetch historical price data from CoinGecko
+   */
+  private async fetchHistoricalData(symbol: string): Promise<PriceData[]> {
+    try {
+      // Map symbol to CoinGecko ID
+      const coinId = this.getCoinGeckoId(symbol);
+      if (!coinId) return [];
+
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7&interval=daily`
+      );
+      
+      if (!response.ok) return [];
+      
+      const data = await response.json();
+      const prices = data.prices || [];
+      const volumes = data.total_volumes || [];
+      
+      return prices.map((pricePoint: [number, number], index: number) => ({
+        timestamp: pricePoint[0],
+        open: pricePoint[1],
+        high: pricePoint[1] * 1.02, // Approximate
+        low: pricePoint[1] * 0.98,  // Approximate
+        close: pricePoint[1],
+        volume: volumes[index] ? volumes[index][1] : 0
+      }));
+    } catch (error) {
+      console.error(`Error fetching historical data for ${symbol}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Map symbol to CoinGecko coin ID
+   */
+  private getCoinGeckoId(symbol: string): string | null {
+    const mapping: { [key: string]: string } = {
+      'BTC': 'bitcoin',
+      'ETH': 'ethereum',
+      'BNB': 'binancecoin',
+      'ADA': 'cardano',
+      'SOL': 'solana',
+      'DOT': 'polkadot',
+      'MATIC': 'matic-network',
+      'LINK': 'chainlink'
+    };
+    return mapping[symbol.toUpperCase()] || null;
+  }
+
+  /**
+   * Generate a simplified trading signal when insufficient data is available
+   */
+  private generateSimplifiedSignal(crypto: CryptoData): TradingSignal {
+    let action: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
+    let confidence = 30; // Base confidence for simplified analysis
+    
+    // Get current confidence threshold to adjust aggressiveness
+    const currentThreshold = this.settings?.confidenceThreshold || 0.65;
+    
+    // Adjust thresholds based on user's confidence setting
+    let buyThreshold = 5;
+    let sellThreshold = -5;
+    
+    if (currentThreshold <= 0.3) {
+      // Very aggressive - trade on small movements
+      buyThreshold = 0.5;
+      sellThreshold = -0.5;
+      confidence = 25;
+    } else if (currentThreshold <= 0.5) {
+      // Aggressive - trade on moderate movements
+      buyThreshold = 1.5;
+      sellThreshold = -1.5;
+      confidence = 35;
+    }
+    
+    // Simple momentum-based analysis
+    if (crypto.changePercent > buyThreshold) {
+      action = 'BUY';
+      confidence = Math.min(75, confidence + Math.abs(crypto.changePercent) * 3);
+    } else if (crypto.changePercent < sellThreshold) {
+      action = 'SELL';
+      confidence = Math.min(75, confidence + Math.abs(crypto.changePercent) * 3);
+    }
+    
+    // Volume confirmation
+    if (crypto.volume && crypto.volume > 1000000000) { // High volume
+      confidence += 10;
+    }
+    
+    console.log(`📊 Simplified signal for ${crypto.symbol}: ${action} (${confidence}% confidence, ${crypto.changePercent}% change, threshold: ${currentThreshold})`);
+    
+    return {
+      symbol: crypto.symbol,
+      action,
+      confidence,
+      price: crypto.price,
+      timestamp: new Date().toISOString(),
+      maIndicator: 'neutral',
+      rsi: 50, // Neutral RSI when no data
+      technicalScore: confidence
+    };
   }
 
   private calculateRSI(crypto: CryptoData): number {

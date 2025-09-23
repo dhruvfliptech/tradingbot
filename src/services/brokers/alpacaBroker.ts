@@ -68,6 +68,18 @@ class AlpacaBroker implements TradingBroker {
     return this.normalizeSymbolInternal(symbol);
   }
 
+  private isCryptoSymbol(symbol: string): boolean {
+    // Common crypto symbols that Alpaca supports
+    const cryptoSymbols = ['BTC', 'ETH', 'ADA', 'SOL', 'DOGE', 'MATIC', 'AVAX', 'DOT', 'LINK', 'UNI', 'ATOM', 'NEAR'];
+    const normalizedSymbol = symbol.toUpperCase();
+    
+    // Check if symbol contains any crypto currency prefix or ends with USD (most Alpaca crypto symbols)
+    return cryptoSymbols.some(crypto => 
+      normalizedSymbol.startsWith(crypto) || 
+      normalizedSymbol.includes(crypto)
+    ) || normalizedSymbol.endsWith('USD');
+  }
+
   toBrokerSymbol(symbol: string): string {
     return this.normalizeSymbolInternal(symbol);
   }
@@ -178,12 +190,17 @@ class AlpacaBroker implements TradingBroker {
 
   async placeOrder(orderData: PlaceOrderParams): Promise<Order> {
     try {
+      // For crypto orders, Alpaca requires time_in_force to be 'gtc' (Good 'Til Canceled)
+      // Other values like 'day' are not supported for crypto trading
+      const isCryptoSymbol = this.isCryptoSymbol(orderData.symbol);
+      const timeInForce = isCryptoSymbol ? 'gtc' : (orderData.time_in_force || 'gtc');
+      
       const payload = {
         symbol: this.toBrokerSymbol(orderData.symbol),
         qty: typeof orderData.qty === 'number' ? orderData.qty.toString() : orderData.qty,
         side: orderData.side,
         type: orderData.order_type,
-        time_in_force: orderData.time_in_force || 'gtc',
+        time_in_force: timeInForce,
         ...(orderData.limit_price ? { limit_price: orderData.limit_price.toString() } : {}),
         ...(orderData.client_order_id ? { client_order_id: orderData.client_order_id } : {}),
       };
