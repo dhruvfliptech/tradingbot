@@ -324,7 +324,7 @@ export const DraggableGrid: React.FC<DraggableGridProps> = ({ widgets, onLayoutC
         draggableHandle=".drag-handle"
       >
         {widgets.map((widget) => (
-          <div key={widget.id} className="relative bg-gray-800 rounded-lg overflow-hidden">
+          <div key={widget.id} className="relative bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
             {/* Widget Header (only visible in edit mode) */}
             {isEditMode && (
               <div className="drag-handle absolute top-0 left-0 right-0 bg-gray-700/95 backdrop-blur-sm border-b border-gray-600 px-3 py-2 flex items-center justify-between z-10 rounded-t-lg cursor-move">
@@ -340,7 +340,7 @@ export const DraggableGrid: React.FC<DraggableGridProps> = ({ widgets, onLayoutC
             
             {/* Widget Content */}
             <div className={`h-full ${isEditMode ? 'pt-10' : ''} transition-all duration-200`}>
-              <div className={`h-full ${isEditMode ? 'opacity-80 hover:opacity-100' : ''} transition-opacity`}>
+              <div className={`h-full ${isEditMode ? 'opacity-80 hover:opacity-100' : ''} transition-opacity overflow-hidden`}>
                 {widget.component}
               </div>
             </div>

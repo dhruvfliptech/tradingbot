@@ -50,7 +50,7 @@ export const FearGreedIndexWidget: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-full overflow-y-auto bg-gray-800 rounded-lg p-6 pr-2">
+      <div className="h-full overflow-y-auto bg-gray-800 rounded-lg border border-gray-700 p-6 pr-2">
         <div className="animate-pulse">
           <div className="h-6 bg-gray-700 rounded w-3/4 mb-4"></div>
           <div className="h-16 bg-gray-700 rounded"></div>
@@ -61,7 +61,7 @@ export const FearGreedIndexWidget: React.FC = () => {
 
   if (!fearGreedData) {
     return (
-      <div className="h-full overflow-y-auto bg-gray-800 rounded-lg p-6 pr-2">
+      <div className="h-full overflow-y-auto bg-gray-800 rounded-lg border border-gray-700 p-6 pr-2">
         <div className="flex items-center text-yellow-400 mb-2">
           <AlertTriangle className="h-5 w-5 mr-2" />
           <h3 className="text-lg font-semibold">Fear & Greed Index</h3>

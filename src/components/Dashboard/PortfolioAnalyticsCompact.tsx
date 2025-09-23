@@ -38,7 +38,7 @@ export const PortfolioAnalyticsCompact: React.FC = () => {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 h-full overflow-y-auto">
+    <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 h-full overflow-y-auto">
       <h2 className="text-xl font-bold text-white mb-6">Portfolio Analytics</h2>
       
       {/* Key Metrics */}

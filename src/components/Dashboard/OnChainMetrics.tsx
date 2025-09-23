@@ -105,6 +105,9 @@ export const OnChainMetrics: React.FC = () => {
             direction: tx.classification || 'whale_to_whale',
             timestamp: tx.timestamp * 1000 || Date.now()
           }));
+        } else if (whaleData.status === 'rejected') {
+          console.log('🔄 Using fallback whale data due to API error');
+          // The service already returns mock data on error, so we'll get it here
         }
 
         // Process active addresses

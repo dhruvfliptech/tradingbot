@@ -49,7 +49,7 @@ export const PerformanceAnalytics: React.FC = () => {
   );
 
   return (
-    <div className="h-full min-h-[260px] overflow-y-auto bg-gray-800 rounded-lg p-6 pr-2">
+    <div className="h-full min-h-[260px] overflow-y-auto bg-gray-800 rounded-lg border border-gray-700 p-6 pr-2">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-white">Performance Analytics</h2>
         <button

@@ -205,7 +205,7 @@ export const PerformanceCalendar: React.FC<PerformanceCalendarProps> = ({ classN
   }
 
   return (
-    <div className={`bg-gray-800 rounded-lg p-6 ${className}`}>
+    <div className={`bg-gray-800 rounded-lg border border-gray-700 p-6 h-full overflow-y-auto ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-white">Performance Calendar</h2>
@@ -319,6 +319,27 @@ export const PerformanceCalendar: React.FC<PerformanceCalendarProps> = ({ classN
           <TrendingUp className="h-3 w-3 text-green-400" />
         </div>
       </div>
+
+      <style jsx>{`
+        /* Custom scrollbar styling */
+        .overflow-y-auto::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-track {
+          background: #1F2937;
+          border-radius: 3px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+          background: #4B5563;
+          border-radius: 3px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+          background: #6B7280;
+        }
+      `}</style>
     </div>
   );
 };

@@ -119,7 +119,7 @@ const ExportReporting: React.FC = () => {
   const selectedExportType = exportTypes.find(t => t.id === selectedType);
 
   return (
-    <div className="bg-gray-900 rounded-lg p-6 space-y-6">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 p-6 space-y-6 h-full overflow-y-auto">
       <div className="flex items-center space-x-3">
         <Download className="w-6 h-6 text-blue-400" />
         <h3 className="text-xl font-semibold text-white">Export & Reporting</h3>
@@ -339,6 +339,27 @@ const ExportReporting: React.FC = () => {
           <li>• All exported data is temporary and not stored on our servers</li>
         </ul>
       </div>
+
+      <style jsx>{`
+        /* Custom scrollbar styling */
+        .overflow-y-auto::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-track {
+          background: #1F2937;
+          border-radius: 3px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+          background: #4B5563;
+          border-radius: 3px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+          background: #6B7280;
+        }
+      `}</style>
     </div>
   );
 };

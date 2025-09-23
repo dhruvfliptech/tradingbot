@@ -200,7 +200,7 @@ export const TradeManagement: React.FC = () => {
         qty: manualTrade.quantity,
         side: manualTrade.side,
         order_type: manualTrade.order_type,
-        time_in_force: 'day',
+        time_in_force: 'gtc', // Use 'gtc' for crypto orders (required by Alpaca)
         limit_price: manualTrade.order_type === 'limit' ? manualTrade.limit_price ?? undefined : undefined,
       });
 
@@ -268,7 +268,7 @@ export const TradeManagement: React.FC = () => {
   }
 
   return (
-    <div className="bg-gray-900 rounded-lg p-6 space-y-6">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 p-6 space-y-6 h-full overflow-y-auto">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl font-semibold text-white flex items-center">
@@ -590,6 +590,27 @@ export const TradeManagement: React.FC = () => {
           ))}
         </div>
       )}
+
+      <style jsx>{`
+        /* Custom scrollbar styling */
+        .overflow-y-auto::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-track {
+          background: #1F2937;
+          border-radius: 3px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+          background: #4B5563;
+          border-radius: 3px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+          background: #6B7280;
+        }
+      `}</style>
     </div>
   );
 };

@@ -59,7 +59,7 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({ account }) => {
   ];
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-800 rounded-lg p-6 pr-2">
+    <div className="h-full overflow-y-auto bg-gray-800 rounded-lg border border-gray-700 p-6 pr-2">
       <h2 className="text-xl font-bold text-white mb-6">Account Summary</h2>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {cards.map((card, index) => (

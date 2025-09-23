@@ -28,8 +28,8 @@ export const GlobalMarketHeader: React.FC = () => {
     };
 
     fetchGlobalData();
-    // Update every 2 minutes
-    const interval = setInterval(fetchGlobalData, 2 * 60 * 1000);
+    // Update every 5 minutes to reduce API calls and avoid rate limiting
+    const interval = setInterval(fetchGlobalData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
