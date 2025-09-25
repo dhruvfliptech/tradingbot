@@ -49,9 +49,10 @@ class BinanceBroker implements TradingBroker {
     this.secretKey = import.meta.env.VITE_BINANCE_SECRET_KEY || '';
     // Force Binance US by default; allow explicit override via VITE_BINANCE_BASE_URL if needed
     this.baseUrl = (import.meta.env.VITE_BINANCE_BASE_URL || 'https://api.binance.us').replace(/\/$/, '');
-    
-    // Opt-in proxy usage via env flag only (default false)
-    this.useProxy = (import.meta.env.VITE_BINANCE_USE_PROXY || '').toString() === 'true';
+
+    // Force proxy usage in development to avoid CORS issues
+    const isDev = import.meta.env.DEV;
+    this.useProxy = isDev || (import.meta.env.VITE_BINANCE_USE_PROXY || '').toString() === 'true';
 
     void this.initializeApiKeys();
     // Prime time offset in background (best-effort)
@@ -157,8 +158,8 @@ class BinanceBroker implements TradingBroker {
       }
     }
 
-    // Build proxy URL
-    const proxyUrl = `/.netlify/functions/binance-proxy${path}`;
+    // Build proxy URL using backend proxy
+    const proxyUrl = `/api/v1/proxy/binance${path}`;
     let url = proxyUrl;
     let body: string | undefined;
 
@@ -170,7 +171,7 @@ class BinanceBroker implements TradingBroker {
       if (!apiKey) {
         throw new Error('Binance API key is not configured');
       }
-      headers['X-MBX-APIKEY'] = apiKey;
+      headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
     if (method === 'POST') {
@@ -198,6 +199,7 @@ class BinanceBroker implements TradingBroker {
         headers,
         body,
         signal: controller.signal,
+        credentials: 'include', // Include cookies for authentication
       });
 
       if (!response.ok) {

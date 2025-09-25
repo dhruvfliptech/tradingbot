@@ -15,14 +15,14 @@ class CoinGeckoService {
 
   constructor() {
     const isDev = import.meta.env.DEV;
-    this.baseUrl = isDev ? '/coingecko/api/v3' : 'https://api.coingecko.com/api/v3';
+    this.baseUrl = isDev ? '/api/v1/proxy/coingecko' : 'https://api.coingecko.com/api/v3';
     this.apiKey = import.meta.env.VITE_COINGECKO_API_KEY || '';
     this.cache = new Map();
     this.rateLimitDelay = 2000; // 2 seconds between requests
     this.lastRequestTime = 0;
     this.requestQueue = [];
     this.isProcessingQueue = false;
-    
+
     // Initialize headers without API key for now
     this.headers = {
       accept: 'application/json',
@@ -358,16 +358,41 @@ class CoinGeckoService {
   }
 
   async getFearGreedIndex(): Promise<FearGreedIndex> {
-    // Fear and Greed Index API (free, no auth required)
-    const response = await fetch('https://api.alternative.me/fng/');
-    const data = await response.json();
-    
-    return {
-      value: parseInt(data.data[0].value),
-      value_classification: data.data[0].value_classification,
-      timestamp: data.data[0].timestamp,
-      time_until_update: data.data[0].time_until_update || '',
-    };
+    try {
+      // Use the backend proxy for consistency
+      const response = await this.makeRequest(`${this.baseUrl}/fear-and-greed?limit=1`);
+      const data = response.data[0];
+
+      return {
+        value: parseInt(data.value),
+        value_classification: data.value_classification,
+        timestamp: data.timestamp,
+        time_until_update: data.time_until_update || '',
+      };
+    } catch (error) {
+      console.error('Failed to fetch Fear & Greed Index, using fallback');
+      // Fallback to direct call if proxy fails
+      try {
+        const response = await fetch('https://api.alternative.me/fng/?limit=1');
+        const data = await response.json();
+
+        return {
+          value: parseInt(data.data[0].value),
+          value_classification: data.data[0].value_classification,
+          timestamp: data.data[0].timestamp,
+          time_until_update: data.data[0].time_until_update || '',
+        };
+      } catch (fallbackError) {
+        console.error('Fallback Fear & Greed Index fetch also failed');
+        // Return a neutral value as last resort
+        return {
+          value: 50,
+          value_classification: 'Neutral',
+          timestamp: Date.now(),
+          time_until_update: '',
+        };
+      }
+    }
   }
 
   async getGlobalMarketData(): Promise<any> {
