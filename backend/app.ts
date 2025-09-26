@@ -11,8 +11,14 @@ import { BacktestingController } from './src/controllers/BacktestingController';
 import { MarketDataController } from './src/controllers/MarketDataController';
 import { AutoTradingController } from './src/controllers/AutoTradingController';
 import { BrokerController } from './src/controllers/BrokerController';
+import { DataAggregatorController } from './src/controllers/DataAggregatorController';
+import { MetricsController } from './src/controllers/MetricsController';
+import { MonitoringController } from './src/controllers/MonitoringController';
 import { SocketIOServer } from './src/websocket/SocketIOServer';
 import { TradingEngineService } from './src/services/trading/TradingEngineService';
+import { DataAggregatorService } from './src/services/data-aggregation/DataAggregatorService';
+import { PerformanceMetricsService } from './src/services/metrics/PerformanceMetricsService';
+import monitoringService from './src/services/monitoring/UnifiedMonitoringService';
 
 // Middleware imports
 import { authenticate, optionalAuth, requireTier, restrictInDemo } from './src/middleware/auth';
@@ -34,6 +40,7 @@ import {
   validateGetMarketData,
   validateSymbolWhitelist
 } from './src/middleware/validation';
+import { trackApiMetrics, trackTradingMetrics } from './src/middleware/monitoring';
 
 import logger from './src/utils/logger';
 
@@ -46,7 +53,12 @@ class App {
   private marketDataController: MarketDataController;
   private autoTradingController: AutoTradingController;
   private brokerController: BrokerController;
+  private dataAggregatorController: DataAggregatorController;
+  private metricsController: MetricsController;
+  private monitoringController: MonitoringController;
   private tradingEngine: TradingEngineService;
+  private dataAggregator: DataAggregatorService | null = null;
+  private performanceMetrics: PerformanceMetricsService | null = null;
 
   constructor() {
     this.app = express();
@@ -59,6 +71,9 @@ class App {
     // AutoTradingController will be initialized in initializeServices with SocketIO
     this.autoTradingController = null as any; // Temporary placeholder
     this.brokerController = new BrokerController();
+    this.dataAggregatorController = new DataAggregatorController();
+    this.metricsController = new MetricsController();
+    this.monitoringController = new MonitoringController();
 
     // Initialize trading engine
     this.tradingEngine = TradingEngineService.getInstance();
@@ -71,6 +86,10 @@ class App {
 
   private async initializeServices(): Promise<void> {
     try {
+      // Initialize Monitoring Service first
+      await monitoringService.initialize();
+      logger.info('Monitoring Service initialized successfully');
+
       // Initialize Trading Engine
       await this.tradingEngine.initialize();
       logger.info('Trading Engine initialized successfully');
@@ -82,6 +101,88 @@ class App {
       // Now initialize AutoTradingController with SocketIO
       this.autoTradingController = new AutoTradingController(this.socketServer);
       logger.info('AutoTradingController initialized with Socket.IO support');
+
+      // Initialize Data Aggregator Service
+      try {
+        const dataAggConfig = {
+          apis: {
+            etherscan: {
+              apiKey: process.env.ETHERSCAN_API_KEY || '',
+              endpoint: 'https://api.etherscan.io/api',
+              rateLimit: 5
+            },
+            bitquery: {
+              apiKey: process.env.BITQUERY_API_KEY,
+              endpoint: 'https://graphql.bitquery.io',
+              rateLimit: 10
+            },
+            covalent: {
+              apiKey: process.env.COVALENT_API_KEY || '',
+              endpoint: 'https://api.covalenthq.com/v1',
+              rateLimit: 5
+            },
+            coinglass: {
+              endpoint: 'https://open-api.coinglass.com',
+              rateLimit: 10
+            },
+            binance: {
+              endpoint: 'https://api.binance.com',
+              rateLimit: 20
+            },
+            cryptoquant: {
+              apiKey: process.env.CRYPTOQUANT_API_KEY,
+              endpoint: 'https://api.cryptoquant.com',
+              rateLimit: 5
+            }
+          },
+          cache: {
+            ttl: {
+              onchain: 300,
+              funding: 60,
+              whale: 120,
+              market: 30
+            },
+            maxSize: 1000
+          },
+          fallback: {
+            maxRetries: 3,
+            retryDelay: 1000,
+            timeout: 10000
+          }
+        };
+
+        this.dataAggregator = new DataAggregatorService(dataAggConfig);
+        await this.dataAggregator.initialize();
+        logger.info('DataAggregatorService initialized successfully');
+
+        // Wire up controller
+        this.dataAggregatorController.setDataAggregator(this.dataAggregator);
+      } catch (error) {
+        logger.warn('DataAggregatorService initialization failed (non-critical):', error);
+      }
+
+      // Initialize Performance Metrics Service
+      try {
+        this.performanceMetrics = new PerformanceMetricsService();
+        await this.performanceMetrics.initialize();
+        logger.info('PerformanceMetricsService initialized successfully');
+
+        // Wire up controller
+        this.metricsController.setMetricsService(this.performanceMetrics);
+
+        // Connect to trading engine for performance tracking
+        if (this.tradingEngine) {
+          this.tradingEngine.on('trade_executed', (trade) => {
+            this.performanceMetrics?.recordTrade(trade);
+          });
+
+          this.tradingEngine.on('position_closed', (position) => {
+            this.performanceMetrics?.recordPosition(position);
+          });
+        }
+      } catch (error) {
+        logger.warn('PerformanceMetricsService initialization failed (non-critical):', error);
+      }
 
     } catch (error) {
       logger.error('Failed to initialize services:', error);
@@ -139,6 +240,7 @@ class App {
 
     // Apply general middleware
     apiRouter.use(sanitizeInput);
+    apiRouter.use(trackApiMetrics);
     apiRouter.use(apiLimiter);
     apiRouter.use(optionalAuth);
 
@@ -286,6 +388,94 @@ class App {
     // External API proxies
     apiRouter.get('/proxy/coingecko/*', this.marketDataController.proxyCoinGecko.bind(this.marketDataController));
     apiRouter.get('/proxy/binance/*', this.marketDataController.proxyBinance.bind(this.marketDataController));
+
+    // Data Aggregator routes
+    apiRouter.get('/data/aggregated-market',
+      authenticate,
+      marketDataLimiter,
+      this.dataAggregatorController.getAggregatedMarketData.bind(this.dataAggregatorController)
+    );
+
+    apiRouter.get('/data/funding-rates',
+      marketDataLimiter,
+      this.dataAggregatorController.getFundingRates.bind(this.dataAggregatorController)
+    );
+
+    apiRouter.get('/data/whale-alerts',
+      authenticate,
+      marketDataLimiter,
+      this.dataAggregatorController.getWhaleAlerts.bind(this.dataAggregatorController)
+    );
+
+    apiRouter.get('/data/on-chain',
+      authenticate,
+      requireTier('premium'),
+      marketDataLimiter,
+      this.dataAggregatorController.getOnChainData.bind(this.dataAggregatorController)
+    );
+
+    apiRouter.get('/data/sentiment',
+      authenticate,
+      marketDataLimiter,
+      this.dataAggregatorController.getSentimentAnalysis.bind(this.dataAggregatorController)
+    );
+
+    // Performance Metrics routes
+    apiRouter.get('/metrics/performance',
+      authenticate,
+      this.metricsController.getPerformanceMetrics.bind(this.metricsController)
+    );
+
+    apiRouter.get('/metrics/sharpe-ratio',
+      authenticate,
+      this.metricsController.getSharpeRatio.bind(this.metricsController)
+    );
+
+    apiRouter.get('/metrics/drawdown',
+      authenticate,
+      this.metricsController.getDrawdownAnalysis.bind(this.metricsController)
+    );
+
+    apiRouter.get('/metrics/pnl',
+      authenticate,
+      this.metricsController.getPnLAnalysis.bind(this.metricsController)
+    );
+
+    apiRouter.get('/metrics/win-rate',
+      authenticate,
+      this.metricsController.getWinRateAnalysis.bind(this.metricsController)
+    );
+
+    apiRouter.get('/metrics/risk',
+      authenticate,
+      this.metricsController.getRiskMetrics.bind(this.metricsController)
+    );
+
+    // Monitoring routes
+    apiRouter.get('/monitoring/dashboard',
+      authenticate,
+      this.monitoringController.getDashboard.bind(this.monitoringController)
+    );
+
+    apiRouter.get('/monitoring/metrics',
+      authenticate,
+      this.monitoringController.getMetrics.bind(this.monitoringController)
+    );
+
+    apiRouter.get('/monitoring/alerts',
+      authenticate,
+      this.monitoringController.getAlerts.bind(this.monitoringController)
+    );
+
+    apiRouter.get('/monitoring/health',
+      this.monitoringController.getHealth.bind(this.monitoringController)
+    );
+
+    apiRouter.post('/monitoring/test-alert',
+      authenticate,
+      requireTier('premium'),
+      this.monitoringController.createTestAlert.bind(this.monitoringController)
+    );
 
     this.app.use('/api/v1', apiRouter);
   }
