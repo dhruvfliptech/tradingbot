@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react';
 import { tradingProviderService } from '../../services/tradingProviderService';
+import { tradingBotService } from '../../services/tradingBotService';
 import { tradeHistoryService } from '../../services/persistence/tradeHistoryService';
 import { useTradingProvider } from '../../hooks/useTradingProvider';
 import { Position as BrokerPosition } from '../../types/trading';

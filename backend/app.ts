@@ -9,23 +9,84 @@ config();
 import { TradingController } from './src/controllers/TradingController';
 import { BacktestingController } from './src/controllers/BacktestingController';
 import { MarketDataController } from './src/controllers/MarketDataController';
+import { AutoTradingController } from './src/controllers/AutoTradingController';
+import { BrokerController } from './src/controllers/BrokerController';
+import { SocketIOServer } from './src/websocket/SocketIOServer';
+import { TradingEngineService } from './src/services/trading/TradingEngineService';
+
+// Middleware imports
+import { authenticate, optionalAuth, requireTier, restrictInDemo } from './src/middleware/auth';
+import {
+  apiLimiter,
+  tradingLimiter,
+  orderLimiter,
+  botControlLimiter,
+  marketDataLimiter
+} from './src/middleware/rateLimiter';
+import {
+  sanitizeInput,
+  validateStartBot,
+  validateStopBot,
+  validateUpdateConfig,
+  validatePlaceOrder,
+  validateSetActiveBroker,
+  validateInitializeBroker,
+  validateGetMarketData,
+  validateSymbolWhitelist
+} from './src/middleware/validation';
+
+import logger from './src/utils/logger';
 
 class App {
   private app: express.Application;
   private server: any;
+  private socketServer: SocketIOServer | null = null;
   private tradingController: TradingController;
   private backtestingController: BacktestingController;
   private marketDataController: MarketDataController;
+  private autoTradingController: AutoTradingController;
+  private brokerController: BrokerController;
+  private tradingEngine: TradingEngineService;
 
   constructor() {
     this.app = express();
+    this.server = createServer(this.app);
+
+    // Controllers will be initialized after services
     this.tradingController = new TradingController();
     this.backtestingController = new BacktestingController();
     this.marketDataController = new MarketDataController();
+    // AutoTradingController will be initialized in initializeServices with SocketIO
+    this.autoTradingController = null as any; // Temporary placeholder
+    this.brokerController = new BrokerController();
+
+    // Initialize trading engine
+    this.tradingEngine = TradingEngineService.getInstance();
 
     this.configureMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
+    this.initializeServices();
+  }
+
+  private async initializeServices(): Promise<void> {
+    try {
+      // Initialize Trading Engine
+      await this.tradingEngine.initialize();
+      logger.info('Trading Engine initialized successfully');
+
+      // Initialize Socket.IO Server
+      this.socketServer = new SocketIOServer(this.server);
+      logger.info('Socket.IO Server initialized successfully');
+
+      // Now initialize AutoTradingController with SocketIO
+      this.autoTradingController = new AutoTradingController(this.socketServer);
+      logger.info('AutoTradingController initialized with Socket.IO support');
+
+    } catch (error) {
+      logger.error('Failed to initialize services:', error);
+      // Don't exit process, allow the server to start but log the error
+    }
   }
 
   private configureMiddleware(): void {
@@ -55,7 +116,12 @@ class App {
         success: true,
         message: 'Trading Bot API is running',
         timestamp: new Date().toISOString(),
-        version: '1.0.0'
+        version: '1.0.0',
+        services: {
+          tradingEngine: 'initialized',
+          socketIO: this.socketServer ? 'running' : 'not started',
+          redis: process.env.REDIS_HOST ? 'configured' : 'not configured'
+        }
       });
     });
 
@@ -71,18 +137,142 @@ class App {
   private setupApiRoutes(): void {
     const apiRouter = express.Router();
 
-    // Trading routes
+    // Apply general middleware
+    apiRouter.use(sanitizeInput);
+    apiRouter.use(apiLimiter);
+    apiRouter.use(optionalAuth);
+
+    // Auto-Trading Bot routes (protected)
+    apiRouter.post('/trading/bot/start',
+      authenticate,
+      botControlLimiter,
+      validateStartBot,
+      this.autoTradingController.startBot.bind(this.autoTradingController)
+    );
+
+    apiRouter.post('/trading/bot/stop',
+      authenticate,
+      botControlLimiter,
+      validateStopBot,
+      this.autoTradingController.stopBot.bind(this.autoTradingController)
+    );
+
+    apiRouter.get('/trading/bot/status',
+      authenticate,
+      this.autoTradingController.getBotStatus.bind(this.autoTradingController)
+    );
+
+    apiRouter.put('/trading/bot/config',
+      authenticate,
+      botControlLimiter,
+      validateUpdateConfig,
+      this.autoTradingController.updateBotConfig.bind(this.autoTradingController)
+    );
+
+    apiRouter.post('/trading/bot/emergency-stop',
+      authenticate,
+      this.autoTradingController.emergencyStop.bind(this.autoTradingController)
+    );
+
+    apiRouter.get('/trading/bot/performance',
+      authenticate,
+      this.autoTradingController.getBotPerformance.bind(this.autoTradingController)
+    );
+
+    apiRouter.post('/trading/manual/order',
+      authenticate,
+      orderLimiter,
+      validatePlaceOrder,
+      validateSymbolWhitelist,
+      restrictInDemo,
+      this.autoTradingController.placeManualOrder.bind(this.autoTradingController)
+    );
+
+    // Broker routes (protected)
+    apiRouter.get('/brokers',
+      authenticate,
+      this.brokerController.getBrokers.bind(this.brokerController)
+    );
+
+    apiRouter.post('/brokers/active',
+      authenticate,
+      validateSetActiveBroker,
+      this.brokerController.setActiveBroker.bind(this.brokerController)
+    );
+
+    apiRouter.get('/brokers/test',
+      authenticate,
+      this.brokerController.testConnections.bind(this.brokerController)
+    );
+
+    apiRouter.get('/brokers/account',
+      authenticate,
+      this.brokerController.getAccount.bind(this.brokerController)
+    );
+
+    apiRouter.get('/brokers/accounts',
+      authenticate,
+      this.brokerController.getAggregatedAccounts.bind(this.brokerController)
+    );
+
+    apiRouter.get('/brokers/positions',
+      authenticate,
+      tradingLimiter,
+      this.brokerController.getPositions.bind(this.brokerController)
+    );
+
+    apiRouter.get('/brokers/orders',
+      authenticate,
+      tradingLimiter,
+      this.brokerController.getOrders.bind(this.brokerController)
+    );
+
+    apiRouter.post('/brokers/orders',
+      authenticate,
+      orderLimiter,
+      validatePlaceOrder,
+      validateSymbolWhitelist,
+      restrictInDemo,
+      this.brokerController.placeOrder.bind(this.brokerController)
+    );
+
+    apiRouter.delete('/brokers/orders/:orderId',
+      authenticate,
+      orderLimiter,
+      this.brokerController.cancelOrder.bind(this.brokerController)
+    );
+
+    apiRouter.get('/brokers/market-data',
+      marketDataLimiter,
+      validateGetMarketData,
+      this.brokerController.getMarketData.bind(this.brokerController)
+    );
+
+    apiRouter.post('/brokers/initialize',
+      authenticate,
+      requireTier('premium'),
+      validateInitializeBroker,
+      this.brokerController.initializeBroker.bind(this.brokerController)
+    );
+
+    // Trading routes (existing)
     apiRouter.get('/trading/status', this.tradingController.getStatus.bind(this.tradingController));
     apiRouter.post('/trading/start', this.tradingController.startTrading.bind(this.tradingController));
     apiRouter.post('/trading/stop', this.tradingController.stopTrading.bind(this.tradingController));
-    apiRouter.get('/trading/signals', this.tradingController.getSignals.bind(this.tradingController));
+    apiRouter.post('/trading/pause', this.tradingController.pauseTrading.bind(this.tradingController));
+    apiRouter.post('/trading/resume', this.tradingController.resumeTrading.bind(this.tradingController));
+    apiRouter.get('/trading/signals', this.autoTradingController.getSignals.bind(this.autoTradingController));
     apiRouter.post('/trading/orders', this.tradingController.placeOrder.bind(this.tradingController));
     apiRouter.get('/trading/orders', this.tradingController.getOrders.bind(this.tradingController));
     apiRouter.delete('/trading/orders/:orderId', this.tradingController.cancelOrder.bind(this.tradingController));
     apiRouter.get('/trading/positions', this.tradingController.getPositions.bind(this.tradingController));
-    apiRouter.post('/trading/positions/:symbol/close', this.tradingController.closePosition.bind(this.tradingController));
+    apiRouter.post('/trading/positions/:positionId/close', this.tradingController.closePosition.bind(this.tradingController));
     apiRouter.put('/trading/settings', this.tradingController.updateSettings.bind(this.tradingController));
     apiRouter.get('/trading/performance', this.tradingController.getPerformance.bind(this.tradingController));
+    apiRouter.post('/trading/emergency-stop', this.tradingController.emergencyStop.bind(this.tradingController));
+    apiRouter.get('/trading/risk-metrics', this.tradingController.getRiskMetrics.bind(this.tradingController));
+    apiRouter.get('/trading/market-data/:symbol', this.tradingController.getMarketData.bind(this.tradingController));
+    apiRouter.get('/trading/health', this.tradingController.healthCheck.bind(this.tradingController));
 
     // Backtesting routes
     apiRouter.post('/backtesting/run', this.backtestingController.runBacktest.bind(this.backtestingController));
@@ -102,62 +292,98 @@ class App {
 
   private setupErrorHandling(): void {
     // 404 handler
-    this.app.use('*', (req, res) => {
+    this.app.use((req, res) => {
       res.status(404).json({
         success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: `Route ${req.originalUrl} not found`
-        }
+        error: 'Endpoint not found',
+        path: req.path
       });
     });
 
-    // Global error handler
+    // Error handler
     this.app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-      console.error('Global error handler:', err);
+      const status = err.status || 500;
+      const message = err.message || 'Internal server error';
 
-      res.status(err.statusCode || 500).json({
+      logger.error('API Error:', {
+        status,
+        message,
+        path: req.path,
+        method: req.method,
+        error: err
+      });
+
+      res.status(status).json({
         success: false,
-        error: {
-          code: err.code || 'INTERNAL_ERROR',
-          message: err.message || 'An unexpected error occurred'
-        }
+        error: message,
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
       });
     });
   }
 
-  public async start(): Promise<void> {
-    const port = process.env.PORT || 3000;
+  public async start(port: number = 3001): Promise<void> {
+    return new Promise((resolve) => {
+      this.server.listen(port, () => {
+        console.log(`\n🚀 Trading Bot Backend is running on port ${port}`);
+        console.log(`📡 Socket.IO Server is running on ws://localhost:${port}`);
+        console.log(`🔗 API available at http://localhost:${port}/api/v1`);
+        console.log(`📊 Health check at http://localhost:${port}/health\n`);
 
-    try {
-      this.server = this.app.listen(port, () => {
-        console.log(`🚀 Trading Bot API server running on port ${port}`);
-        console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+        if (process.env.REDIS_HOST) {
+          console.log(`🗄️  Redis connected at ${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`);
+        } else {
+          console.log('⚠️  Redis not configured - using in-memory state (not recommended for production)');
+        }
+
+        console.log('\nEnvironment:', process.env.NODE_ENV || 'development');
+        console.log('Frontend URL:', process.env.FRONTEND_URL || 'http://localhost:5173');
+
+        resolve();
       });
-    } catch (error) {
-      console.error('Failed to start server:', error);
-      process.exit(1);
-    }
+    });
   }
 
   public async stop(): Promise<void> {
-    if (this.server) {
-      this.server.close();
-      console.log('🛑 Server stopped');
+    logger.info('Shutting down server...');
+
+    // Stop trading engine
+    await this.tradingEngine.emergencyStopAll();
+
+    // Shutdown Socket.IO server
+    if (this.socketServer) {
+      await this.socketServer.shutdown();
     }
-  }
 
-  public getApp(): express.Application {
-    return this.app;
+    // Close HTTP server
+    return new Promise((resolve) => {
+      this.server.close(() => {
+        logger.info('Server shutdown complete');
+        resolve();
+      });
+    });
   }
 }
 
-// Export for testing
-export { App };
+// Start the application
+const app = new App();
+const port = parseInt(process.env.PORT || '3001', 10);
 
-// Start server if this file is run directly
-if (require.main === module) {
-  const app = new App();
-  app.start();
-}
+app.start(port).catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+  await app.stop();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
+  await app.stop();
+  process.exit(0);
+});
+
+export default app;

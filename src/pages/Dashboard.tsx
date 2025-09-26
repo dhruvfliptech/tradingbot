@@ -30,13 +30,13 @@ import { useVirtualPortfolio } from '../hooks/useVirtualPortfolio';
 import { useTradingProvider } from '../hooks/useTradingProvider';
 import { useScrollPreservation } from '../hooks/useScrollPreservation';
 import { useEmergencyStop } from '../hooks/useEmergencyStop';
-import { useWebSocket } from '../services/websocketService';
+import { useRealtimePositions, useRealtimeOrders, useRealtimeMarketData } from '../hooks/useSocket';
 import { tradingProviderService } from '../services/tradingProviderService';
 import { coinGeckoService } from '../services/coinGeckoService';
 import { supabase } from '../lib/supabase';
 import { Account, Position, Order, CryptoData } from '../types/trading';
 import { TradingModeToggle } from '../components/TradingModeToggle';
-import { tradingAgentV2 } from '../services/tradingAgentV2';
+import { tradingBotService } from '../services/tradingBotService';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -45,8 +45,6 @@ export const Dashboard: React.FC = () => {
   useEmergencyStop();
   
   const [account, setAccount] = useState<Account | null>(null);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
   const [btcUsdPrice, setBtcUsdPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,20 +64,22 @@ export const Dashboard: React.FC = () => {
   
   const { user, signOut } = useAuth();
   const { portfolio, stats: portfolioStats, getPerformanceHistory } = useVirtualPortfolio();
-  const { preserveScroll } = useScrollPreservation(orders);
-  const { lastMessage, isConnected: wsConnected } = useWebSocket('trade_executed');
   const { activeProvider } = useTradingProvider();
 
+  // Use Socket.IO hooks for real-time data
+  const { positions, isConnected: positionsConnected } = useRealtimePositions();
+  const { orders, isConnected: ordersConnected } = useRealtimeOrders();
+  const watchSymbols = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA'];
+  const { marketData, isConnected: marketConnected } = useRealtimeMarketData(watchSymbols);
+  const { preserveScroll } = useScrollPreservation(orders);
+  const wsConnected = positionsConnected && ordersConnected && marketConnected;
 
-  // Handle WebSocket trade messages with scroll preservation
+
+  // Handle real-time order updates with scroll preservation
   useEffect(() => {
-    if (lastMessage && lastMessage.type === 'trade_executed') {
-      preserveScroll(() => {
-        // Refresh orders when a trade is executed
-        handleOrderPlaced();
-      });
-    }
-  }, [lastMessage]);
+    // Orders are automatically updated via the useRealtimeOrders hook
+    // No need to manually refresh when trades are executed
+  }, [orders]);
 
 
   useEffect(() => {
@@ -115,6 +115,9 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
 
+    // Get bot status on mount
+    tradingBotService.getStatus().catch(console.error);
+
     // Live refresh intervals
     const cryptoInterval = setInterval(async () => {
       try {
@@ -128,14 +131,8 @@ export const Dashboard: React.FC = () => {
     const refreshBroker = async () => {
       if (!user) return;
       try {
-        const [accountData, positionsData, ordersData] = await Promise.all([
-          tradingProviderService.getAccount(),
-          tradingProviderService.getPositions(),
-          tradingProviderService.getOrders(),
-        ]);
+        const accountData = await tradingProviderService.getAccount();
         setAccount(accountData);
-        setPositions(positionsData);
-        setOrders(ordersData);
         setApiStatuses((prev) => ({ ...prev, broker: 'connected' }));
       } catch (err) {
         console.warn('Broker refresh failed:', err);
@@ -145,11 +142,9 @@ export const Dashboard: React.FC = () => {
 
     const brokerInterval = setInterval(refreshBroker, 60 * 1000); // 60s
 
-    // Subscribe to auto-trader
-    const unsub = tradingAgent.subscribe((e) => {
-      if (e.type === 'order_submitted') {
-        refreshBroker();
-      }
+    // Subscribe to trading bot events
+    const unsub = tradingBotService.subscribe('order_submitted', (e) => {
+      refreshBroker();
     });
 
     // Auto-refresh whale alerts every 2 minutes
@@ -183,15 +178,9 @@ export const Dashboard: React.FC = () => {
       if (btc) setBtcUsdPrice(btc.price);
 
       // Then fetch other data
-      const [accountData, positionsData, ordersData] = await Promise.all([
-        tradingProviderService.getAccount(),
-        tradingProviderService.getPositions(),
-        tradingProviderService.getOrders(),
-      ]);
-
+      const accountData = await tradingProviderService.getAccount();
       setAccount(accountData);
-      setPositions(positionsData);
-      setOrders(ordersData);
+      // Positions and orders are now managed by Socket.IO hooks
       
       // Update API statuses
       setApiStatuses({
@@ -256,14 +245,9 @@ export const Dashboard: React.FC = () => {
 
   const handleOrderPlaced = async () => {
     try {
-      const [accountData, positionsData, ordersData] = await Promise.all([
-        tradingProviderService.getAccount(),
-        tradingProviderService.getPositions(),
-        tradingProviderService.getOrders(),
-      ]);
+      const accountData = await tradingProviderService.getAccount();
       setAccount(accountData);
-      setPositions(positionsData);
-      setOrders(ordersData);
+      // Positions and orders are automatically updated via Socket.IO
     } catch (err) {
       console.warn('Post-order refresh failed:', err);
     }
@@ -272,8 +256,7 @@ export const Dashboard: React.FC = () => {
   const handleSignOut = async () => {
     await signOut();
     setAccount(null);
-    setPositions([]);
-    setOrders([]);
+    // Positions and orders will be cleared by Socket.IO disconnect
   };
 
   const getOverallApiStatus = () => {
@@ -546,7 +529,7 @@ export const Dashboard: React.FC = () => {
                     onClick={async () => {
                       if (confirm('Are you sure you want to stop the auto-trading agent?')) {
                         try {
-                          await tradingAgentV2.stop();
+                          await tradingBotService.emergencyStop('User requested emergency stop');
                           alert('Auto-trading agent stopped successfully!');
                         } catch (error) {
                           console.error('Failed to stop agent:', error);
@@ -607,13 +590,13 @@ export const Dashboard: React.FC = () => {
               <div className="flex items-center space-x-4">
                 {/* Agent Status */}
                 <div className={`flex items-center px-3 py-1 rounded-full text-xs sm:text-sm ${
-                  tradingAgent.isRunning() ? 'bg-green-900/30' : 'bg-red-900/30'
+                  tradingBotService.isRunning() ? 'bg-green-900/30' : 'bg-red-900/30'
                 }`}>
                   <div className={`w-2 h-2 rounded-full mr-2 ${
-                    tradingAgent.isRunning() ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+                    tradingBotService.isRunning() ? 'bg-green-400 animate-pulse' : 'bg-red-400'
                   }`} />
-                  <span className={tradingAgent.isRunning() ? 'text-green-400' : 'text-red-400'}>
-                    Agent {tradingAgent.isRunning() ? 'Active' : 'Paused'}
+                  <span className={tradingBotService.isRunning() ? 'text-green-400' : 'text-red-400'}>
+                    Agent {tradingBotService.isRunning() ? 'Active' : 'Paused'}
                   </span>
                 </div>
 
@@ -659,6 +642,21 @@ export const Dashboard: React.FC = () => {
                     );
                   })()}
                 </button>
+
+                {/* Socket.IO Connection Status */}
+                <div className="flex items-center px-2 py-1 bg-gray-700 rounded-lg text-xs">
+                  {wsConnected ? (
+                    <>
+                      <Wifi className="h-3 w-3 mr-1 text-green-400" />
+                      <span className="text-green-400 hidden sm:inline">Live</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3 mr-1 text-red-400" />
+                      <span className="text-red-400 hidden sm:inline">Offline</span>
+                    </>
+                  )}
+                </div>
 
                 {/* Whale Alerts */}
                 <div className="relative">
