@@ -1,6 +1,6 @@
 import { Account, CryptoData, Order, Position } from '../types/trading';
 import { alpacaBroker } from './brokers/alpacaBroker';
-import { binanceBroker } from './brokers/binanceBroker';
+import { binanceBrokerSecure } from './brokers/binanceBrokerSecure';
 import { PlaceOrderParams, TradingBroker, TradingBrokerId } from './brokers/types';
 
 export type { PlaceOrderParams, TradingBrokerId } from './brokers/types';
@@ -10,7 +10,7 @@ const STORAGE_KEY = 'trading.active_provider';
 class TradingProviderService {
   private providers: Record<TradingBrokerId, TradingBroker> = {
     alpaca: alpacaBroker,
-    binance: binanceBroker,
+    binance: binanceBrokerSecure,
   };
 
   private activeProvider: TradingBrokerId;

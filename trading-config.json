@@ -1,0 +1,76 @@
+{
+  "binance": {
+    "live": {
+      "description": "Live trading configuration for Binance.US",
+      "safety": {
+        "maxPositionSizeUSD": 1000,
+        "maxDailyLossUSD": 500,
+        "maxOpenPositions": 5,
+        "stopLossPercent": 2,
+        "requireConfirmation": false,
+        "allowedSymbols": [
+          "BTCUSDT",
+          "ETHUSDT",
+          "BNBUSDT",
+          "SOLUSDT",
+          "ADAUSDT",
+          "DOTUSDT",
+          "AVAXUSDT",
+          "MATICUSDT",
+          "LINKUSDT",
+          "UNIUSDT"
+        ]
+      },
+      "strategy": {
+        "cycleIntervalMs": 60000,
+        "confidenceThreshold": 0.65,
+        "cooldownMinutes": 15,
+        "riskBudgetUsd": 100,
+        "maxDrawdownPercent": 10,
+        "positionSizeMethod": "kelly",
+        "kellyFraction": 0.1
+      },
+      "monitoring": {
+        "alertOnLoss": true,
+        "alertThresholdUSD": 100,
+        "emailAlerts": false,
+        "discordWebhook": null
+      }
+    },
+    "test": {
+      "description": "Test configuration with minimal risk",
+      "safety": {
+        "maxPositionSizeUSD": 100,
+        "maxDailyLossUSD": 50,
+        "maxOpenPositions": 2,
+        "stopLossPercent": 1,
+        "requireConfirmation": true,
+        "allowedSymbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ]
+      },
+      "strategy": {
+        "cycleIntervalMs": 300000,
+        "confidenceThreshold": 0.8,
+        "cooldownMinutes": 30,
+        "riskBudgetUsd": 20,
+        "maxDrawdownPercent": 5,
+        "positionSizeMethod": "fixed",
+        "fixedPositionUSD": 50
+      }
+    }
+  },
+  "alpaca": {
+    "paper": {
+      "description": "Paper trading configuration for Alpaca",
+      "safety": {
+        "maxPositionSizeUSD": 10000,
+        "maxDailyLossUSD": 5000,
+        "maxOpenPositions": 10,
+        "stopLossPercent": 5,
+        "requireConfirmation": false
+      }
+    }
+  }
+}

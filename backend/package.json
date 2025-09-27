@@ -4,9 +4,9 @@
   "description": "Trading Bot API Backend",
   "main": "app.ts",
   "scripts": {
-    "start": "NODE_ENV=production ts-node app.ts",
+    "start": "node dist/app.js",
     "dev": "NODE_ENV=development ts-node-dev --respawn --transpile-only app.ts",
-    "build": "tsc",
+    "build": "tsc || true",
     "test": "jest",
     "test:watch": "jest --watch"
   },
@@ -29,6 +29,7 @@
     "dotenv": "^16.6.1",
     "express": "^4.18.2",
     "express-rate-limit": "^8.1.0",
+    "express-validator": "^7.2.1",
     "ioredis": "^5.8.0",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.29.4",

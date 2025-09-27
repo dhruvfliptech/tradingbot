@@ -3,7 +3,7 @@
  * Communicates with backend broker services via REST API
  */
 
-import { supabase } from './supabase';
+import { supabase } from '../lib/supabase';
 
 export interface BrokerAccount {
   id: string;

@@ -4,7 +4,7 @@
  */
 
 import { io, Socket } from 'socket.io-client';
-import { supabase } from './supabase';
+import { supabase } from '../lib/supabase';
 
 export type BotStatus = 'not_initialized' | 'active' | 'stopped' | 'error';
 

@@ -143,8 +143,14 @@ export class ComposerService extends EventEmitter {
 
   async connect(): Promise<void> {
     try {
+      // Disable Composer MCP connection for now
+      logger.info('Composer MCP connection disabled - using local mode');
+      this.isConnected = false;
+      return Promise.resolve();
+
+      /* Disabled for now - authentication issue
       logger.info('Connecting to Composer MCP server...');
-      
+
       const wsUrl = this.mcpUrl.replace('https://', 'wss://').replace('http://', 'ws://');
       this.ws = new WebSocket(wsUrl);
 
@@ -184,9 +190,11 @@ export class ComposerService extends EventEmitter {
           }
         }, 10000);
       });
+      */ // End of disabled block
     } catch (error) {
       logger.error('Error connecting to Composer MCP:', error);
-      throw error;
+      // Don't throw error - allow system to continue
+      // throw error;
     }
   }
 

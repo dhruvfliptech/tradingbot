@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { supabase } from './supabase';
+import { supabase } from '../lib/supabase';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 

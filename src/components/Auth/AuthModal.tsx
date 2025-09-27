@@ -29,11 +29,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
         });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: {
+              email,
+            }
+          }
         });
-        if (error) throw error;
+
+        if (error) {
+          // Check for common Supabase errors
+          if (error.message.includes('not enabled') || error.message.includes('Database error')) {
+            throw new Error('Account creation is temporarily unavailable. Please use demo mode or contact support.');
+          }
+          throw error;
+        }
+
+        // If signup successful but no session (email confirmation required)
+        if (data.user && !data.session) {
+          setError('Please check your email to confirm your account.');
+          return;
+        }
       }
       
       onAuthSuccess();

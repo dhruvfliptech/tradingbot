@@ -3,7 +3,7 @@ import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tool
 import { useNavigate } from 'react-router-dom';
 import { Activity, Bitcoin, LogOut, User, Wifi, WifiOff, AlertCircle, Fish, X, Settings as SettingsIcon, SlidersHorizontal, Square } from 'lucide-react';
 import { DraggableGrid } from '../components/Dashboard/DraggableGrid';
-import { AccountSummary } from '../components/Dashboard/AccountSummary';
+import { AccountSummary } from '../components/AccountSummary';  // Updated import for new component
 import { PositionsTable } from '../components/Dashboard/PositionsTable';
 import { MarketWatchlist } from '../components/Dashboard/MarketWatchlist';
 import { TradingSignals } from '../components/Dashboard/TradingSignals';

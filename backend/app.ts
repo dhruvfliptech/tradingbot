@@ -14,6 +14,7 @@ import { BrokerController } from './src/controllers/BrokerController';
 import { DataAggregatorController } from './src/controllers/DataAggregatorController';
 import { MetricsController } from './src/controllers/MetricsController';
 import { MonitoringController } from './src/controllers/MonitoringController';
+import { BinanceProxyController } from './src/controllers/BinanceProxyController';
 import { SocketIOServer } from './src/websocket/SocketIOServer';
 import { TradingEngineService } from './src/services/trading/TradingEngineService';
 import { DataAggregatorService } from './src/services/data-aggregation/DataAggregatorService';
@@ -56,6 +57,7 @@ class App {
   private dataAggregatorController: DataAggregatorController;
   private metricsController: MetricsController;
   private monitoringController: MonitoringController;
+  private binanceProxyController: BinanceProxyController;
   private tradingEngine: TradingEngineService;
   private dataAggregator: DataAggregatorService | null = null;
   private performanceMetrics: PerformanceMetricsService | null = null;
@@ -74,14 +76,14 @@ class App {
     this.dataAggregatorController = new DataAggregatorController();
     this.metricsController = new MetricsController();
     this.monitoringController = new MonitoringController();
+    this.binanceProxyController = new BinanceProxyController();
 
     // Initialize trading engine
     this.tradingEngine = TradingEngineService.getInstance();
 
     this.configureMiddleware();
-    this.setupRoutes();
-    this.setupErrorHandling();
-    this.initializeServices();
+    // Routes will be set up after services are initialized
+    // Error handling must be set up AFTER routes
   }
 
   private async initializeServices(): Promise<void> {
@@ -183,6 +185,11 @@ class App {
       } catch (error) {
         logger.warn('PerformanceMetricsService initialization failed (non-critical):', error);
       }
+
+      // Now setup routes after services are initialized
+      this.setupRoutes();
+      // Setup error handling AFTER routes
+      this.setupErrorHandling();
 
     } catch (error) {
       logger.error('Failed to initialize services:', error);
@@ -355,6 +362,47 @@ class App {
       requireTier('premium'),
       validateInitializeBroker,
       this.brokerController.initializeBroker.bind(this.brokerController)
+    );
+
+    // Binance Proxy Routes (Secure - API keys on backend only)
+    apiRouter.get('/binance/account',
+      authenticate,
+      marketDataLimiter,
+      this.binanceProxyController.getAccount.bind(this.binanceProxyController)
+    );
+
+    apiRouter.post('/binance/order',
+      authenticate,
+      orderLimiter,
+      this.binanceProxyController.placeOrder.bind(this.binanceProxyController)
+    );
+
+    apiRouter.get('/binance/orders',
+      authenticate,
+      marketDataLimiter,
+      this.binanceProxyController.getOrders.bind(this.binanceProxyController)
+    );
+
+    apiRouter.delete('/binance/orders/:orderId',
+      authenticate,
+      orderLimiter,
+      this.binanceProxyController.cancelOrder.bind(this.binanceProxyController)
+    );
+
+    apiRouter.get('/binance/positions',
+      authenticate,
+      marketDataLimiter,
+      this.binanceProxyController.getPositions.bind(this.binanceProxyController)
+    );
+
+    apiRouter.get('/binance/market/:symbol',
+      marketDataLimiter,
+      this.binanceProxyController.getMarketData.bind(this.binanceProxyController)
+    );
+
+    apiRouter.get('/binance/test',
+      marketDataLimiter,
+      this.binanceProxyController.testConnection.bind(this.binanceProxyController)
     );
 
     // Trading routes (existing)

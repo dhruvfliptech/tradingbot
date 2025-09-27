@@ -379,9 +379,9 @@ export class PerformanceMetricsService extends EventEmitter {
   }
 
   private calculateExpectedShortfall(returns: number[], confidence: number): number {
-    const var = this.calculateVaR(returns, confidence);
-    const tailReturns = returns.filter(ret => ret <= var);
-    return tailReturns.length > 0 ? 
+    const varValue = this.calculateVaR(returns, confidence);
+    const tailReturns = returns.filter(ret => ret <= varValue);
+    return tailReturns.length > 0 ?
       tailReturns.reduce((sum, ret) => sum + ret, 0) / tailReturns.length : 0;
   }
 

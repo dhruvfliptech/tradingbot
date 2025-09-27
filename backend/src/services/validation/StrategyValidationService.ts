@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { ComposerService, StrategyDefinition, BacktestConfig, BacktestResult } from '../composer/ComposerService';
-import { AnalyticsService } from '../analytics/AnalyticsService';
+// import { AnalyticsService } from '../analytics/AnalyticsService'; // TODO: Create AnalyticsService
 import logger from '../../utils/logger';
 
 export interface ValidationRule {
@@ -108,7 +108,7 @@ export class StrategyValidationService extends EventEmitter {
   constructor(composerService: ComposerService) {
     super();
     this.composerService = composerService;
-    this.analyticsService = new AnalyticsService();
+    // this.analyticsService = new AnalyticsService(); // TODO: Create AnalyticsService
     this.initializeValidationRules();
   }
 
