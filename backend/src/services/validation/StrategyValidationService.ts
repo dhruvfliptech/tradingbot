@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { ComposerService, StrategyDefinition, BacktestConfig, BacktestResult } from '../composer/ComposerService';
-import { AnalyticsService } from '../analytics/AnalyticsService';
+// import { AnalyticsService } from '../metrics/PerformanceMetricsService';
 import logger from '../../utils/logger';
 
 export interface ValidationRule {
@@ -102,13 +102,13 @@ export interface MarketFitValidationResult {
 
 export class StrategyValidationService extends EventEmitter {
   private composerService: ComposerService;
-  private analyticsService: AnalyticsService;
+  // private analyticsService: AnalyticsService;
   private validationRules: Map<string, ValidationRule> = new Map();
 
   constructor(composerService: ComposerService) {
     super();
     this.composerService = composerService;
-    this.analyticsService = new AnalyticsService();
+    // this.analyticsService = new AnalyticsService();
     this.initializeValidationRules();
   }
 
